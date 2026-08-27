@@ -620,75 +620,128 @@ elif page == "Stok & İmalat":
     st.markdown('<div style="background:linear-gradient(90deg,rgba(251,191,36,.10),rgba(52,211,153,.05));'
                 'border:1px solid #12324a;border-radius:12px;padding:12px 16px;font-size:12.5px;'
                 'color:#cfe3f7;margin-bottom:14px">📦 <b>Stok & İmalat Durumu (Malzeme Mutabakatı):</b> '
-                'her kaleme <b>Sahaya Gelen</b> ve <b>İmalata Giren</b> miktarını girin. Sistem kalan stok, '
-                'stok değeri ve <b>hakedişe esas tutarı</b> otomatik hesaplar. '
-                'Kural: <i>Sahaya Gelen = İmalata Giren + Kalan Stok</i>.</div>', unsafe_allow_html=True)
+                'Düzenleme modunu açıp her kaleme <b>Sahaya Gelen</b> ve <b>İmalata Giren</b> miktarını girin. '
+                'Kalan stok, stok değeri, imalat %% ve <b>hakedişe esas tutar</b> anında hesaplanır ve grafiğe yansır. '
+                '<i>Kural: Sahaya Gelen = İmalata Giren + Kalan Stok</i>.</div>', unsafe_allow_html=True)
 
     stok = storage.load_stok(conn)
     se = core.stok_enrich(stok)
     oz = core.stok_ozet(stok)
 
-    c = st.columns(4)
-    c[0].metric("Sahaya Gelen Değer", core.fmt_money(oz["gelen_deger"]))
-    c[1].metric("Hakedişe Esas (imalat)", core.fmt_money(oz["hakedise_esas"]))
+    # ── KPI ŞERİDİ ──
+    tot = se["tutar"].sum()
+    gelen_pct = se["gelen_pct"].mul(se["tutar"]).sum() / tot if tot else 0
+    imalat_pct = se["imalat_pct"].mul(se["tutar"]).sum() / tot if tot else 0
+    c = st.columns(5)
+    c[0].metric("Sahaya Gelen Değer", core.fmt_money(oz["gelen_deger"]),
+                delta=f"%{gelen_pct:.0f} tedarik", delta_color="off")
+    c[1].metric("Hakedişe Esas (imalat)", core.fmt_money(oz["hakedise_esas"]),
+                delta=f"%{imalat_pct:.0f} imalat", delta_color="off")
     c[2].metric("Kalan Stok Değeri", core.fmt_money(oz["stok_deger"]),
                 help="Sahada bekleyen, henüz imal edilmemiş malzemenin bedeli")
     c[3].metric("Stok Devir Oranı", f"%{oz['devir']:.0f}",
                 help="Gelen malzemenin imalata dönüşme oranı")
+    c[4].metric("Mutabakatsız Kalem", oz["mutabakatsiz"], delta_color="inverse")
 
     if oz["mutabakatsiz"] > 0:
         st.markdown(f'<div style="background:rgba(251,113,133,.12);border:1px solid #fb7185;border-radius:10px;'
-                    f'padding:9px 13px;font-size:12px;color:#fecdd3;margin-bottom:10px">🔴 <b>Mutabakatsızlık:</b> '
-                    f'{oz["mutabakatsiz"]} kalemde imalat, sahaya gelenden fazla görünüyor. '
-                    f'Malzeme kaydı kontrol edilmeli.</div>', unsafe_allow_html=True)
+                    f'padding:9px 13px;font-size:12px;color:#fecdd3;margin:6px 0 10px">🔴 <b>Mutabakatsızlık:</b> '
+                    f'{oz["mutabakatsiz"]} kalemde imalat, sahaya gelenden fazla. Malzeme kaydı kontrol edilmeli.</div>',
+                    unsafe_allow_html=True)
 
+    # ── GRAFİK ──
     with st.container(border=True):
-        st.markdown('<div class="panel-ttl">Grup Bazında — Hakedişe Esas + Kalan Stok Değeri</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-ttl">Grup Bazında — Hakedişe Esas (imalat) + Kalan Stok Değeri</div>', unsafe_allow_html=True)
         st.plotly_chart(charts.stok_bar(core.stok_grup_agg(stok)), width="stretch", config=PLOT)
 
-    gsel = st.selectbox("Grup filtresi", ["(Tümü)"] + sorted(se["grup"].unique()), key="stok_grp")
-    only_stok = st.checkbox("Sadece stoku olan kalemler", value=False, key="stok_only")
-    view = se if gsel == "(Tümü)" else se[se["grup"] == gsel]
+    # ── FİLTRE ──
+    f1, f2, f3 = st.columns([1.4, 1.4, 1])
+    grp_view = f1.selectbox("Grup", ["(Tümü)"] + sorted(se["grup"].unique().tolist()), key="stok_grp")
+    ara = f2.text_input("Malzeme adında ara", key="stok_ara", placeholder="ör. panel, kablo...")
+    only_stok = f3.checkbox("Sadece stoklu", value=False, key="stok_only")
+    view = se if grp_view == "(Tümü)" else se[se["grup"] == grp_view]
+    if ara:
+        view = view[view["ad"].str.contains(ara, case=False, na=False)]
     if only_stok:
         view = view[view["kalan_stok"] > 0]
-    st.caption(f"Görüntülenen: **{len(view)} kalem** · Kalan stok değeri **{core.fmt_money(view['stok_deger'].sum())}**")
 
-    if ADMIN:
-        st.markdown('<div class="panel-ttl">Miktar Girişi — Sahaya Gelen & İmalata Giren</div>', unsafe_allow_html=True)
-        ed = view[["poz", "ad", "grup", "miktar", "birim", "bf", "gelen", "imalat"]].copy()
-        ed_show = st.data_editor(
-            ed, width="stretch", hide_index=True, key="stok_ed",
-            disabled=["poz", "ad", "grup", "miktar", "birim", "bf"],
-            column_config={
-                "poz": "Poz", "ad": st.column_config.TextColumn("Malzeme", width="large"),
-                "grup": "Grup",
-                "miktar": st.column_config.NumberColumn("Sözleşme Mik.", format="%.0f"),
-                "birim": "Birim",
-                "bf": st.column_config.NumberColumn("Birim Fiyat", format="$%.2f"),
-                "gelen": st.column_config.NumberColumn("Sahaya Gelen", min_value=0, format="%.0f"),
-                "imalat": st.column_config.NumberColumn("İmalata Giren", min_value=0, format="%.0f")})
-        if not ed_show[["gelen", "imalat"]].equals(ed[["gelen", "imalat"]]):
+    st.caption(f"Görüntülenen: {len(view)} kalem · Kalan stok değeri {core.fmt_money(view['stok_deger'].sum())} · "
+               f"Hakedişe esas {core.fmt_money(view['hakedise_esas'].sum())}".replace("$", "\\$"))
+
+    edit_mode = st.toggle("✏️ Düzenleme modu — günlük stok/imalat girişi", value=False, key="stok_edit") if ADMIN else False
+
+    # pagination
+    PAGE = 40
+    pages_n = max(1, (len(view) + PAGE - 1) // PAGE)
+    if len(view) > PAGE:
+        pg = st.number_input(f"Sayfa (her sayfada {PAGE} kalem · toplam {pages_n} sayfa)",
+                             1, pages_n, 1, key="stok_page")
+    else:
+        pg = 1
+    sl = view.iloc[(pg - 1) * PAGE: pg * PAGE]
+
+    if edit_mode:
+        for _, r in sl.iterrows():
+            st.session_state.setdefault(f"sg_{r['poz']}", float(r["gelen"]))
+            st.session_state.setdefault(f"si_{r['poz']}", float(r["imalat"]))
+        with st.form("stok_edit_form", border=False):
+            h = st.columns([3.2, 1.1, 0.8, 1.3, 1.3, 1.1, 1.2, 1.2])
+            h[0].markdown("**Malzeme**"); h[1].markdown("**Sözleşme**"); h[2].markdown("**Birim**")
+            h[3].markdown("**Sahaya Gelen**"); h[4].markdown("**İmalata Giren**"); h[5].markdown("**Kalan Stok**")
+            h[6].markdown("**Stok $**"); h[7].markdown("**Hakediş $**")
+            pozlar = []
+            for _, r in sl.iterrows():
+                pozlar.append(r["poz"])
+                gelen = st.session_state.get(f"sg_{r['poz']}", r["gelen"])
+                imalat = st.session_state.get(f"si_{r['poz']}", r["imalat"])
+                kalan = max(0, gelen - imalat)
+                mut_bad = imalat > gelen + 1e-6
+                cc = st.columns([3.2, 1.1, 0.8, 1.3, 1.3, 1.1, 1.2, 1.2])
+                cc[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{r["ad"][:52]}</div>', unsafe_allow_html=True)
+                cc[1].markdown(f'<div style="font-size:11px;padding-top:8px;color:#9fc3e0;text-align:right">{r["miktar"]:,.0f}</div>', unsafe_allow_html=True)
+                cc[2].markdown(f'<div style="font-size:11px;padding-top:8px;color:#7fb0b3">{r["birim"]}</div>', unsafe_allow_html=True)
+                cc[3].number_input("g", min_value=0.0, step=100.0, key=f"sg_{r['poz']}", label_visibility="collapsed")
+                cc[4].number_input("i", min_value=0.0, step=100.0, key=f"si_{r['poz']}", label_visibility="collapsed")
+                kcol = "#fb7185" if mut_bad else "#c7e8e4"
+                cc[5].markdown(f'<div style="font-size:11px;padding-top:8px;color:{kcol};text-align:right">{kalan:,.0f}</div>', unsafe_allow_html=True)
+                cc[6].markdown(f'<div style="font-size:11px;padding-top:8px;color:#fbbf24;text-align:right">{core.fmt_money(kalan*r["bf"])}</div>', unsafe_allow_html=True)
+                cc[7].markdown(f'<div style="font-size:11px;padding-top:8px;color:#34d399;text-align:right">{core.fmt_money(imalat*r["bf"])}</div>', unsafe_allow_html=True)
+            saved = st.form_submit_button("💾 Kaydet — grafiğe ve yüzdelere yansıt", type="primary", width="stretch")
+        if saved:
             m = storage.load_stok(conn).set_index("poz")
-            for _, r in ed_show.iterrows():
-                m.loc[r["poz"], ["gelen", "imalat"]] = [r["gelen"], r["imalat"]]
-            storage.save_stok(conn, m.reset_index())
-            st.toast("Stok/imalat güncellendi."); st.rerun()
+            n = 0
+            for poz in pozlar:
+                g = float(st.session_state.get(f"sg_{poz}", 0)); i = float(st.session_state.get(f"si_{poz}", 0))
+                if abs(g - float(m.loc[poz, "gelen"])) > 1e-6 or abs(i - float(m.loc[poz, "imalat"])) > 1e-6:
+                    m.loc[poz, ["gelen", "imalat"]] = [max(0, g), max(0, i)]; n += 1
+            if n:
+                storage.save_stok(conn, m.reset_index())
+                st.success(f"✅ {n} kalem güncellendi · grafik ve yüzdeler yenilendi.")
+                st.rerun()
+            else:
+                st.toast("Değişiklik yok.")
     else:
         rows = ""
-        for _, r in view.head(400).iterrows():
+        for _, r in sl.iterrows():
             mcol = "#fb7185" if not r["mutabakat"] else "#c7e8e4"
+            iw = max(0, min(100, r["imalat_pct"])); gw = max(0, min(100, r["gelen_pct"]))
             rows += (f'<tr><td style="color:#5f7a99;font-size:10px">{r["poz"]}</td>'
-                     f'<td class="mx-name" style="font-size:11px;max-width:300px">{r["ad"][:52]}</td>'
+                     f'<td class="mx-name" style="font-size:11px;max-width:260px">{r["ad"][:48]}</td>'
                      f'<td style="text-align:right;color:#9fc3e0;font-size:10.5px">{r["miktar"]:,.0f} {r["birim"]}</td>'
                      f'<td style="text-align:right;color:#38bdf8;font-size:10.5px">{r["gelen"]:,.0f}</td>'
                      f'<td style="text-align:right;color:#22d3ee;font-size:10.5px">{r["imalat"]:,.0f}</td>'
                      f'<td style="text-align:right;color:{mcol};font-size:10.5px">{r["kalan_stok"]:,.0f}</td>'
+                     f'<td style="min-width:90px"><div style="position:relative;background:#0e2233;border-radius:5px;height:15px;overflow:hidden">'
+                     f'<div style="position:absolute;left:0;top:0;height:100%;width:{iw:.0f}%;background:#34d399;border-radius:5px"></div>'
+                     f'<span style="position:absolute;left:6px;top:0;line-height:15px;font-size:9px;font-weight:800;color:#e8f4ff">%{iw:.0f}</span></div></td>'
                      f'<td style="text-align:right;color:#fbbf24;font-size:10.5px">{core.fmt_money(r["stok_deger"])}</td>'
                      f'<td style="text-align:right;color:#34d399;font-size:10.5px">{core.fmt_money(r["hakedise_esas"])}</td></tr>')
         st.markdown(f'<table class="mx"><tr><th>POZ</th><th>MALZEME</th><th style="text-align:right">SÖZLEŞME</th>'
                     f'<th style="text-align:right">GELEN</th><th style="text-align:right">İMALAT</th>'
-                    f'<th style="text-align:right">KALAN STOK</th><th style="text-align:right">STOK DEĞERİ</th>'
-                    f'<th style="text-align:right">HAKEDİŞE ESAS</th></tr>{rows}</table>', unsafe_allow_html=True)
+                    f'<th style="text-align:right">KALAN STOK</th><th>İMALAT %</th>'
+                    f'<th style="text-align:right">STOK $</th><th style="text-align:right">HAKEDİŞE ESAS</th></tr>{rows}</table>',
+                    unsafe_allow_html=True)
+
 
 elif page == "İş Programı":
     st.markdown('<div style="background:linear-gradient(90deg,rgba(34,211,238,.10),rgba(139,92,246,.06));'
