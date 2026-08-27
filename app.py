@@ -511,10 +511,26 @@ if page == "Komuta Paneli":
 
 elif page == "Arakonak 1-2 GES":
     kpi_ribbon()
+
+    # Filtreler
+    f1, f2, f3 = st.columns([1, 2, 2])
+    grp_view = f1.selectbox("Grup", ["(Tümü)"] + sorted(base["grp"].unique().tolist()), index=0)
+    disc_view = f2.selectbox("Disiplin", ["(Tümü)"] + sorted(scoped["disc"].unique().tolist()), index=0)
+    search = f3.text_input("🔎 Poz adında ara", "")
+    view = base if grp_view == "(Tümü)" else base[base["grp"] == grp_view]
+    if disc_view != "(Tümü)":
+        view = view[view["disc"] == disc_view]
+    if search.strip():
+        view = view[view["name"].str.contains(search.strip(), case=False, na=False)]
+
+    # Düzenleme modu + Ekle/Sil aynı satırda
+    edit_mode = False
     if ADMIN:
-        cadd, cdel = st.columns(2)
-        with cadd:
-            with st.expander("➕ Yeni İş Kalemi Ekle", expanded=False):
+        tcol, acol, dcol = st.columns([2, 1.3, 1.3])
+        edit_mode = tcol.toggle("✏️ Düzenleme modu", value=False,
+                                help="Açıkken her kalem düzenlenip yanındaki 💾 ile tek tek kaydedilir.")
+        with acol:
+            with st.popover("➕ Yeni İş Kalemi Ekle", use_container_width=True):
                 with st.form("add_item_form", clear_on_submit=True):
                     ai_grp = st.selectbox("Grup", sorted(base["grp"].unique().tolist()))
                     disc_opts = sorted(base["disc"].unique().tolist())
@@ -536,34 +552,17 @@ elif page == "Arakonak 1-2 GES":
                     else:
                         add_item(ai_grp, disc_final, ai_name, ai_unit, ai_qty, ai_up, ai_plan, ai_real)
                         st.toast("Yeni iş kalemi eklendi."); st.rerun()
-        with cdel:
-            with st.expander("🗑 İş Kalemi Sil", expanded=False):
+        with dcol:
+            with st.popover("🗑 İş Kalemi Sil", use_container_width=True):
                 del_map = {f'{r["disc"]} — {r["name"][:50]}': r["id"] for _, r in scoped.iterrows()}
                 del_sel = st.multiselect("Silinecek kalem(ler)", list(del_map.keys()))
                 if st.button("Seçilenleri sil", disabled=not del_sel, width="stretch"):
                     delete_items([del_map[x] for x in del_sel])
                     st.toast(f"{len(del_sel)} kalem silindi."); st.rerun()
-    else:
-        st.info("Görüntüleyici modu: tablo salt-okunur.")
-
-    f1, f2, f3 = st.columns([1, 2, 2])
-    grp_view = f1.selectbox("Grup", ["(Tümü)"] + sorted(base["grp"].unique().tolist()), index=0)
-    disc_view = f2.selectbox("Disiplin", ["(Tümü)"] + sorted(scoped["disc"].unique().tolist()), index=0)
-    search = f3.text_input("🔎 Poz adında ara", "")
-    view = base if grp_view == "(Tümü)" else base[base["grp"] == grp_view]
-    if disc_view != "(Tümü)":
-        view = view[view["disc"] == disc_view]
-    if search.strip():
-        view = view[view["name"].str.contains(search.strip(), case=False, na=False)]
 
     st.markdown(f'<div style="color:#7fb0b3;font-size:12px;margin:6px 0">Görüntülenen: '
                 f'<b>{len(view)}</b> kalem · Toplam <b>{core.fmt_money(view["tutar"].sum())}</b></div>',
                 unsafe_allow_html=True)
-
-    edit_mode = False
-    if ADMIN:
-        edit_mode = st.toggle("✏️ Düzenleme modu", value=False,
-                              help="Açıkken kalemler düzenlenebilir forma dönüşür; kapalıyken salt görünüm.")
 
     if ADMIN and edit_mode and len(view) > 0:
         PAGE = 40
@@ -575,37 +574,28 @@ elif page == "Arakonak 1-2 GES":
                                  min_value=1, max_value=pages, value=1, step=1)
             sl = view.iloc[(pg - 1) * PAGE: pg * PAGE]
             st.caption(f"{(pg-1)*PAGE+1}–{min(pg*PAGE, total)} arası kalemler gösteriliyor.")
-        # widget değerlerini önceden session_state'e tohumla (form/value+key bayatlık sorununu önler)
+        # başlık satırı
+        h = st.columns([3.0, 1.0, 0.7, 1.0, 1.2, 1.1, 1.1, 0.9])
+        h[0].markdown("**Poz Adı**"); h[1].markdown("**Miktar**"); h[2].markdown("**Birim**")
+        h[3].markdown("**B.Fiyat**"); h[4].markdown("**Tutar**")
+        h[5].markdown("**Plan %**"); h[6].markdown("**Gerçek %**"); h[7].markdown("**Kaydet**")
         for _, r in sl.iterrows():
-            st.session_state.setdefault(f"ep_{r['id']}", int(round(r["plan"])))
-            st.session_state.setdefault(f"er_{r['id']}", int(round(r["real"])))
-        with st.form("edit_items", border=False):
-            h = st.columns([3.4, 1.1, 0.8, 1.1, 1.3, 1.3, 1.3])
-            h[0].markdown("**Poz Adı**"); h[1].markdown("**Miktar**"); h[2].markdown("**Birim**")
-            h[3].markdown("**Birim Fiyat**"); h[4].markdown("**Tutar**")
-            h[5].markdown("**Plan %**"); h[6].markdown("**Gerçek %**")
-            ids = []
-            for _, r in sl.iterrows():
-                ids.append(r["id"])
-                c = st.columns([3.4, 1.1, 0.8, 1.1, 1.3, 1.3, 1.3])
-                c[0].markdown(f'<div class="row-edit" style="font-size:11px;padding-top:8px;color:#dbeafe">'
-                              f'{r["name"][:60]}</div>', unsafe_allow_html=True)
-                c[1].markdown(f'<div style="font-size:11px;padding-top:8px;color:#9fc3e0;text-align:right">{r["qty"]:,.0f}</div>', unsafe_allow_html=True)
-                c[2].markdown(f'<div style="font-size:11px;padding-top:8px;color:#7fb0b3">{r["unit"]}</div>', unsafe_allow_html=True)
-                c[3].markdown(f'<div style="font-size:11px;padding-top:8px;color:#9fc3e0;text-align:right">${r["up"]:,.2f}</div>', unsafe_allow_html=True)
-                c[4].markdown(f'<div style="font-size:11px;padding-top:8px;color:#c7e8e4;text-align:right">{core.fmt_money(r["tutar"])}</div>', unsafe_allow_html=True)
-                c[5].number_input("p", 0, 100, key=f"ep_{r['id']}", label_visibility="collapsed")
-                c[6].number_input("r", 0, 100, key=f"er_{r['id']}", label_visibility="collapsed")
-            saved = st.form_submit_button("💾 Kaydet — grafiklere yansıt", type="primary", width="stretch")
-        if saved:
-            cur = st.session_state.df.set_index("id")
-            n_upd = 0
-            for rid in ids:
-                old = cur.loc[rid]
+            rid = r["id"]
+            st.session_state.setdefault(f"ep_{rid}", int(round(r["plan"])))
+            st.session_state.setdefault(f"er_{rid}", int(round(r["real"])))
+            c = st.columns([3.0, 1.0, 0.7, 1.0, 1.2, 1.1, 1.1, 0.9])
+            c[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{r["name"][:56]}</div>', unsafe_allow_html=True)
+            c[1].markdown(f'<div style="font-size:11px;padding-top:8px;color:#9fc3e0;text-align:right">{r["qty"]:,.0f}</div>', unsafe_allow_html=True)
+            c[2].markdown(f'<div style="font-size:11px;padding-top:8px;color:#7fb0b3">{r["unit"]}</div>', unsafe_allow_html=True)
+            c[3].markdown(f'<div style="font-size:11px;padding-top:8px;color:#9fc3e0;text-align:right">${r["up"]:,.2f}</div>', unsafe_allow_html=True)
+            c[4].markdown(f'<div style="font-size:11px;padding-top:8px;color:#c7e8e4;text-align:right">{core.fmt_money(r["tutar"])}</div>', unsafe_allow_html=True)
+            c[5].number_input("p", 0, 100, key=f"ep_{rid}", label_visibility="collapsed")
+            c[6].number_input("r", 0, 100, key=f"er_{rid}", label_visibility="collapsed")
+            if c[7].button("💾", key=f"save_{rid}", help="Bu kalemi kaydet"):
+                old = st.session_state.df.set_index("id").loc[rid]
                 nm = str(old["name"])[:40]
-                p = float(st.session_state.get(f"ep_{rid}", old["plan"]))
-                rl = float(st.session_state.get(f"er_{rid}", old["real"]))
-                p = max(0.0, min(100.0, p)); rl = max(0.0, min(100.0, rl))
+                p = max(0.0, min(100.0, float(st.session_state.get(f"ep_{rid}", old["plan"]))))
+                rl = max(0.0, min(100.0, float(st.session_state.get(f"er_{rid}", old["real"]))))
                 changed = False
                 if abs(p - float(old["plan"])) > 1e-9:
                     storage.log_change(conn, user["username"], nm, "Plan %", f"{old['plan']:.0f}", f"{p:.0f}"); changed = True
@@ -613,16 +603,14 @@ elif page == "Arakonak 1-2 GES":
                     storage.log_change(conn, user["username"], nm, "Gerçek %", f"{old['real']:.0f}", f"{rl:.0f}"); changed = True
                 if changed:
                     st.session_state.df.loc[st.session_state.df["id"] == rid, ["plan", "real"]] = [p, rl]
-                    n_upd += 1
-            if n_upd:
-                persist_progress()
-                st.success(f"✅ {n_upd} kalem kaydedildi · grafikler ve S-Eğrisi güncellendi.")
-                st.toast(f"{n_upd} kalem kaydedildi.")
-            else:
-                st.toast("Değişiklik yok.")
-            st.rerun()
-    else:
+                    persist_progress()
+                    st.toast(f"✅ Kaydedildi: {nm}")
+                    st.rerun()
+                else:
+                    st.toast("Değişiklik yok.")
+    elif not (ADMIN and edit_mode):
         items_table_html(view)
+
 
 elif page == "Stok & İmalat":
     st.markdown('<div style="background:linear-gradient(90deg,rgba(251,191,36,.10),rgba(52,211,153,.05));'
@@ -692,42 +680,37 @@ elif page == "Stok & İmalat":
         for _, r in sl.iterrows():
             st.session_state.setdefault(f"sg_{r['poz']}", float(r["gelen"]))
             st.session_state.setdefault(f"si_{r['poz']}", float(r["imalat"]))
-        with st.form("stok_edit_form", border=False):
-            h = st.columns([3.2, 1.1, 0.8, 1.3, 1.3, 1.1, 1.2, 1.2])
-            h[0].markdown("**Malzeme**"); h[1].markdown("**Sözleşme**"); h[2].markdown("**Birim**")
-            h[3].markdown("**Sahaya Gelen**"); h[4].markdown("**İmalata Giren**"); h[5].markdown("**Kalan Stok**")
-            h[6].markdown("**Stok $**"); h[7].markdown("**Hakediş $**")
-            pozlar = []
-            for _, r in sl.iterrows():
-                pozlar.append(r["poz"])
-                gelen = st.session_state.get(f"sg_{r['poz']}", r["gelen"])
-                imalat = st.session_state.get(f"si_{r['poz']}", r["imalat"])
-                kalan = max(0, gelen - imalat)
-                mut_bad = imalat > gelen + 1e-6
-                cc = st.columns([3.2, 1.1, 0.8, 1.3, 1.3, 1.1, 1.2, 1.2])
-                cc[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{r["ad"][:52]}</div>', unsafe_allow_html=True)
-                cc[1].markdown(f'<div style="font-size:11px;padding-top:8px;color:#9fc3e0;text-align:right">{r["miktar"]:,.0f}</div>', unsafe_allow_html=True)
-                cc[2].markdown(f'<div style="font-size:11px;padding-top:8px;color:#7fb0b3">{r["birim"]}</div>', unsafe_allow_html=True)
-                cc[3].number_input("g", min_value=0.0, step=100.0, key=f"sg_{r['poz']}", label_visibility="collapsed")
-                cc[4].number_input("i", min_value=0.0, step=100.0, key=f"si_{r['poz']}", label_visibility="collapsed")
-                kcol = "#fb7185" if mut_bad else "#c7e8e4"
-                cc[5].markdown(f'<div style="font-size:11px;padding-top:8px;color:{kcol};text-align:right">{kalan:,.0f}</div>', unsafe_allow_html=True)
-                cc[6].markdown(f'<div style="font-size:11px;padding-top:8px;color:#fbbf24;text-align:right">{core.fmt_money(kalan*r["bf"])}</div>', unsafe_allow_html=True)
-                cc[7].markdown(f'<div style="font-size:11px;padding-top:8px;color:#34d399;text-align:right">{core.fmt_money(imalat*r["bf"])}</div>', unsafe_allow_html=True)
-            saved = st.form_submit_button("💾 Kaydet — grafiğe ve yüzdelere yansıt", type="primary", width="stretch")
-        if saved:
-            m = storage.load_stok(conn).set_index("poz")
-            n = 0
-            for poz in pozlar:
-                g = float(st.session_state.get(f"sg_{poz}", 0)); i = float(st.session_state.get(f"si_{poz}", 0))
+        h = st.columns([2.6, 0.9, 0.7, 1.2, 1.2, 1.0, 1.1, 1.1, 0.8])
+        h[0].markdown("**Malzeme**"); h[1].markdown("**Sözleşme**"); h[2].markdown("**Birim**")
+        h[3].markdown("**Sahaya Gelen**"); h[4].markdown("**İmalata Giren**"); h[5].markdown("**Kalan**")
+        h[6].markdown("**Stok $**"); h[7].markdown("**Hakediş $**"); h[8].markdown("**Kaydet**")
+        for _, r in sl.iterrows():
+            poz = r["poz"]
+            gelen = st.session_state.get(f"sg_{poz}", r["gelen"])
+            imalat = st.session_state.get(f"si_{poz}", r["imalat"])
+            kalan = max(0, gelen - imalat)
+            mut_bad = imalat > gelen + 1e-6
+            cc = st.columns([2.6, 0.9, 0.7, 1.2, 1.2, 1.0, 1.1, 1.1, 0.8])
+            cc[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{r["ad"][:48]}</div>', unsafe_allow_html=True)
+            cc[1].markdown(f'<div style="font-size:11px;padding-top:8px;color:#9fc3e0;text-align:right">{r["miktar"]:,.0f}</div>', unsafe_allow_html=True)
+            cc[2].markdown(f'<div style="font-size:11px;padding-top:8px;color:#7fb0b3">{r["birim"]}</div>', unsafe_allow_html=True)
+            cc[3].number_input("g", min_value=0.0, step=100.0, key=f"sg_{poz}", label_visibility="collapsed")
+            cc[4].number_input("i", min_value=0.0, step=100.0, key=f"si_{poz}", label_visibility="collapsed")
+            kcol = "#fb7185" if mut_bad else "#c7e8e4"
+            cc[5].markdown(f'<div style="font-size:11px;padding-top:8px;color:{kcol};text-align:right">{kalan:,.0f}</div>', unsafe_allow_html=True)
+            cc[6].markdown(f'<div style="font-size:11px;padding-top:8px;color:#fbbf24;text-align:right">{core.fmt_money(kalan*r["bf"])}</div>', unsafe_allow_html=True)
+            cc[7].markdown(f'<div style="font-size:11px;padding-top:8px;color:#34d399;text-align:right">{core.fmt_money(imalat*r["bf"])}</div>', unsafe_allow_html=True)
+            if cc[8].button("💾", key=f"stoksave_{poz}", help="Bu kalemi kaydet"):
+                m = storage.load_stok(conn).set_index("poz")
+                g = max(0.0, float(st.session_state.get(f"sg_{poz}", 0)))
+                i = max(0.0, float(st.session_state.get(f"si_{poz}", 0)))
                 if abs(g - float(m.loc[poz, "gelen"])) > 1e-6 or abs(i - float(m.loc[poz, "imalat"])) > 1e-6:
-                    m.loc[poz, ["gelen", "imalat"]] = [max(0, g), max(0, i)]; n += 1
-            if n:
-                storage.save_stok(conn, m.reset_index())
-                st.success(f"✅ {n} kalem güncellendi · grafik ve yüzdeler yenilendi.")
-                st.rerun()
-            else:
-                st.toast("Değişiklik yok.")
+                    m.loc[poz, ["gelen", "imalat"]] = [g, i]
+                    storage.save_stok(conn, m.reset_index())
+                    st.toast(f"✅ Kaydedildi: {r['ad'][:30]}")
+                    st.rerun()
+                else:
+                    st.toast("Değişiklik yok.")
     else:
         rows = ""
         for _, r in sl.iterrows():
