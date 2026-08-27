@@ -90,6 +90,14 @@ def inject_css(theme="dark"):
 
     /* ── SOL RAY ── */
     section[data-testid="stSidebar"]{{background:{t['rail']};border-right:1px solid {t['railb']};width:238px !important;}}
+    /* Sidebar HER ZAMAN AÇIK — kapatma butonu gizli (mahsur kalma önlenir) */
+    [data-testid="stSidebarCollapseButton"]{{display:none !important;}}
+    [data-testid="stExpandSidebarButton"]{{display:none !important;}}
+    section[data-testid="stSidebar"]{{
+        transform:none !important;visibility:visible !important;
+        min-width:238px !important;margin-left:0 !important;}}
+    section[data-testid="stSidebar"][aria-expanded="false"]{{
+        transform:none !important;margin-left:0 !important;}}
     .rail-logo{{text-align:center;padding:6px 8px 14px;border-bottom:1px solid {t['railb']};margin-bottom:10px;}}
     .rail-logo img{{height:46px;}}
     section[data-testid="stSidebar"] [role="radiogroup"]{{gap:3px;}}
