@@ -432,64 +432,6 @@ def sched_real_curve(act_df):
 
 # ══════════════ İŞVEREN ↔ YÜKLENİCİ KARŞILAŞTIRMA ══════════════
 # Yüklenici grubu / İşveren disiplini → ortak karşılaştırma grubu
-_ORTAK_GRUP_ISV = {
-    "PV MODÜLLER": "PV Modül", "SOLAR EVİRİCİLER": "İnverter",
-    "DC KABLOLAMA": "Kablo", "1 kV AC, 1.8 kV DC KABLOLAR": "Kablo",
-    "OG KABLOLAR": "Kablo", "0,75 kV AC, 1 kV DC KABLOLAR": "Kablo",
-    "AG DAĞITIM PANOLARI": "Pano", "DC PANOLAR": "Pano", "SAHA DAĞITIM PANOLARI": "Pano",
-    "TRAFOLAR": "Trafo", "METAL ENCLOSED HÜCRELER": "OG Hücre",
-    "BETON KÖŞKLER": "Beton Köşk", "CCTV KAMERA": "CCTV & Aydınlatma", "AYDINLATMA": "CCTV & Aydınlatma",
-    "TOPRAKLAMALAR": "Topraklama", "ENERJİ İZLEME": "Enerji İzleme",
-    "TAMAMLAYICI İMALATLAR": "Tamamlayıcı", "GENEL İŞLER": "Tamamlayıcı", "HAFRİYAT": "Tamamlayıcı",
-    "PANEL TAŞIYICI SİSTEMİ": "Konstrüksiyon", "SAHA KORUMA İŞLERİ": "Tel Çit",
-    "SAHA İÇİ YOLLAR": "İnşaat", "DRENAJ SİSTEMİ": "İnşaat", "SAHA İÇİ HARÇLI İMALATLAR": "İnşaat",
-}
-_ORTAK_GRUP_YUK = {
-    "PV MODÜL": "PV Modül", "PV MODUL": "PV Modül", "İNVERTER": "İnverter", "KABLO": "Kablo",
-    "PANO": "Pano", "TRAFO": "Trafo", "OG HÜCRE": "OG Hücre", "BETON KÖŞK": "Beton Köşk",
-    "CCTV AYDINLATMA": "CCTV & Aydınlatma", "TOPRAKLAMA": "Topraklama", "ENERJİ İZLEME": "Enerji İzleme",
-    "TAMAMLAYICI": "Tamamlayıcı", "TAMAMLAYICI İMALATLAR": "Tamamlayıcı",
-    "KONSTRUKSİYON": "Konstrüksiyon", "TEL ÇİT": "Tel Çit", "İNŞAAT": "İnşaat",
-}
-
-
-def kesif_karsilastir(isv_df, yuk_df):
-    """İşveren keşfi vs Yüklenici hakedişi — ortak grup bazında tutar karşılaştırması."""
-    isv = isv_df.copy(); yuk = yuk_df.copy()
-    isv["ograp"] = isv["disc"].map(_ORTAK_GRUP_ISV).fillna("Diğer")
-    yuk["ograp"] = yuk["grup"].map(_ORTAK_GRUP_YUK).fillna("Diğer")
-    gi = isv.groupby("ograp")["tutar"].sum()
-    gy = yuk.groupby("ograp")["tutar"].sum()
-    groups = sorted(set(list(gi.index) + list(gy.index)), key=lambda g: -gi.get(g, 0))
-    rows = []
-    for g in groups:
-        vi = float(gi.get(g, 0)); vy = float(gy.get(g, 0))
-        fark = vi - vy
-        rows.append({"grup": g, "isveren": vi, "yuklenici": vy, "fark": fark,
-                     "fark_pct": (fark / vi * 100) if vi else 0})
-    return pd.DataFrame(rows)
-
-
-def disiplin_ilerleme_karsilastir(isv_df, yuk_df):
-    """Ortak grup bazında: işveren planı vs yüklenici gerçeği (kazanılan değer)."""
-    isv = isv_df.copy(); yuk = yuk_df.copy()
-    isv["ograp"] = isv["disc"].map(_ORTAK_GRUP_ISV).fillna("Diğer")
-    yuk["ograp"] = yuk["grup"].map(_ORTAK_GRUP_YUK).fillna("Diğer")
-    for d in (isv, yuk):
-        for c in ("plan", "gercek"):
-            if c not in d.columns:
-                d[c] = 0.0
-    rows = []
-    groups = sorted(set(list(isv["ograp"].unique()) + list(yuk["ograp"].unique())))
-    for g in groups:
-        si = isv[isv["ograp"] == g]; sy = yuk[yuk["ograp"] == g]
-        bi = si["tutar"].sum(); by = sy["tutar"].sum()
-        isv_plan = float((si["tutar"] * si["plan"] / 100).sum() / bi * 100) if bi else 0
-        yuk_ger = float((sy["tutar"] * sy["gercek"] / 100).sum() / by * 100) if by else 0
-        rows.append({"grup": g, "isveren_butce": bi, "yuklenici_butce": by,
-                     "isveren_plan": isv_plan, "yuklenici_gercek": yuk_ger,
-                     "sapma": yuk_ger - isv_plan})
-    return pd.DataFrame(rows)
 
 
 def sched_finish_estimate(sched_df, start, today=None):
@@ -580,3 +522,43 @@ def ges_progress(sched_df, asof=None):
             "budget": float(w),
         })
     return pd.DataFrame(rows)
+
+
+# ══════════════ STOK & İMALAT (MALZEME MUTABAKATI) ══════════════
+def stok_enrich(df):
+    """Stok tablosunu zenginleştirir: kalan stok, imalat %, stok değeri, hakedişe esas."""
+    d = df.copy()
+    for c in ("miktar", "bf", "tutar", "gelen", "imalat"):
+        d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0.0)
+    d["kalan_stok"] = (d["gelen"] - d["imalat"]).clip(lower=0)
+    d["imalat_pct"] = (d["imalat"] / d["miktar"].replace(0, pd.NA) * 100).fillna(0).clip(0, 100)
+    d["gelen_pct"] = (d["gelen"] / d["miktar"].replace(0, pd.NA) * 100).fillna(0).clip(0, 100)
+    d["stok_deger"] = d["kalan_stok"] * d["bf"]              # sahada bekleyen malzeme değeri
+    d["hakedise_esas"] = d["imalat"] * d["bf"]               # yapılan imalatın parasal karşılığı
+    # mutabakat: imalat gelenden fazla olamaz
+    d["mutabakat"] = d["imalat"] <= d["gelen"] + 1e-6
+    return d
+
+
+def stok_ozet(df):
+    """Stok sayfası üst kartları için özet."""
+    d = stok_enrich(df)
+    return {
+        "gelen_deger": float((d["gelen"] * d["bf"]).sum()),
+        "hakedise_esas": float(d["hakedise_esas"].sum()),
+        "stok_deger": float(d["stok_deger"].sum()),
+        "devir": float(d["imalat"].sum() / d["gelen"].sum() * 100) if d["gelen"].sum() > 0 else 0.0,
+        "mutabakatsiz": int((~d["mutabakat"]).sum()),
+    }
+
+
+def stok_grup_agg(df):
+    """Grup bazında gelen / imalat / kalan stok değeri (grafik için)."""
+    d = stok_enrich(df)
+    d["gelen_deger"] = d["gelen"] * d["bf"]
+    g = d.groupby("grup").agg(
+        gelen=("gelen_deger", "sum"),
+        imalat=("hakedise_esas", "sum"),
+        stok=("stok_deger", "sum"),
+    ).reset_index().sort_values("gelen", ascending=False)
+    return g

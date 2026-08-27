@@ -191,20 +191,18 @@ def gantt(sched_df, today=None):
     return fig
 
 
-def compare_bar(cmp_df):
-    """İşveren vs Yüklenici — grup bazlı yatay karşılaştırma çubuğu."""
+def stok_bar(g):
+    """Grup bazında: hakedişe esas (imalat) + kalan stok değeri — yatay çubuk."""
     import pandas as pd
     fig = go.Figure()
-    if cmp_df is None or cmp_df.empty:
+    if g is None or g.empty:
         _style(fig, 400); return fig
-    d = cmp_df.sort_values("isveren", ascending=True)
-    fig.add_trace(go.Bar(y=d["grup"], x=d["isveren"], name="İşveren Keşfi", orientation="h",
-                         marker=dict(color=C_PLAN, opacity=0.85),
-                         hovertemplate="%{y}<br>İşveren: $%{x:,.0f}<extra></extra>"))
-    fig.add_trace(go.Bar(y=d["grup"], x=d["yuklenici"], name="Yüklenici Hakedişi", orientation="h",
-                         marker=dict(color=C_OK, opacity=0.85),
-                         hovertemplate="%{y}<br>Yüklenici: $%{x:,.0f}<extra></extra>"))
-    _style(fig, max(420, len(d) * 34))
-    fig.update_xaxes(tickprefix="$", tickformat=".2s", showgrid=True, gridcolor=C_GRID)
-    fig.update_layout(barmode="group", bargap=0.25, legend=dict(orientation="h", y=1.08))
+    d = g.sort_values("gelen", ascending=True).tail(10)
+    fig.add_trace(go.Bar(y=d["grup"], x=d["imalat"], name="Hakedişe Esas (imalat)", orientation="h",
+                         marker=dict(color=C_OK), hovertemplate="%{y}<br>İmalat: $%{x:,.0f}<extra></extra>"))
+    fig.add_trace(go.Bar(y=d["grup"], x=d["stok"], name="Kalan Stok Değeri", orientation="h",
+                         marker=dict(color="#fbbf24"), hovertemplate="%{y}<br>Stok: $%{x:,.0f}<extra></extra>"))
+    _style(fig, max(360, len(d) * 40))
+    fig.update_xaxes(tickprefix="$", tickformat=".2s", showgrid=True, gridcolor=C_GRID, rangemode="tozero")
+    fig.update_layout(barmode="stack", bargap=0.3, legend=dict(orientation="h", y=1.08))
     return fig

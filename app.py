@@ -260,8 +260,8 @@ meta = {
 }
 
 # ────────────────────── SOL RAY ──────────────────────
-PAGES = ["Komuta Paneli", "Arakonak 1-2 GES", "İş Programı", "Rapor & Yedek", "Ayarlar"]
-ICON = {"Komuta Paneli": "▦", "Arakonak 1-2 GES": "🏗", "İş Programı": "📅",
+PAGES = ["Komuta Paneli", "Arakonak 1-2 GES", "Stok & İmalat", "İş Programı", "Rapor & Yedek", "Ayarlar"]
+ICON = {"Komuta Paneli": "▦", "Arakonak 1-2 GES": "🏗", "Stok & İmalat": "📦", "İş Programı": "📅",
         "Rapor & Yedek": "⭳", "Ayarlar": "⚙"}
 with st.sidebar:
     _logo_b64 = LOGO_WHITE if theme == "dark" else LOGO_BLACK
@@ -615,6 +615,80 @@ elif page == "Arakonak 1-2 GES":
             st.rerun()
     else:
         items_table_html(view)
+
+elif page == "Stok & İmalat":
+    st.markdown('<div style="background:linear-gradient(90deg,rgba(251,191,36,.10),rgba(52,211,153,.05));'
+                'border:1px solid #12324a;border-radius:12px;padding:12px 16px;font-size:12.5px;'
+                'color:#cfe3f7;margin-bottom:14px">📦 <b>Stok & İmalat Durumu (Malzeme Mutabakatı):</b> '
+                'her kaleme <b>Sahaya Gelen</b> ve <b>İmalata Giren</b> miktarını girin. Sistem kalan stok, '
+                'stok değeri ve <b>hakedişe esas tutarı</b> otomatik hesaplar. '
+                'Kural: <i>Sahaya Gelen = İmalata Giren + Kalan Stok</i>.</div>', unsafe_allow_html=True)
+
+    stok = storage.load_stok(conn)
+    se = core.stok_enrich(stok)
+    oz = core.stok_ozet(stok)
+
+    c = st.columns(4)
+    c[0].metric("Sahaya Gelen Değer", core.fmt_money(oz["gelen_deger"]))
+    c[1].metric("Hakedişe Esas (imalat)", core.fmt_money(oz["hakedise_esas"]))
+    c[2].metric("Kalan Stok Değeri", core.fmt_money(oz["stok_deger"]),
+                help="Sahada bekleyen, henüz imal edilmemiş malzemenin bedeli")
+    c[3].metric("Stok Devir Oranı", f"%{oz['devir']:.0f}",
+                help="Gelen malzemenin imalata dönüşme oranı")
+
+    if oz["mutabakatsiz"] > 0:
+        st.markdown(f'<div style="background:rgba(251,113,133,.12);border:1px solid #fb7185;border-radius:10px;'
+                    f'padding:9px 13px;font-size:12px;color:#fecdd3;margin-bottom:10px">🔴 <b>Mutabakatsızlık:</b> '
+                    f'{oz["mutabakatsiz"]} kalemde imalat, sahaya gelenden fazla görünüyor. '
+                    f'Malzeme kaydı kontrol edilmeli.</div>', unsafe_allow_html=True)
+
+    with st.container(border=True):
+        st.markdown('<div class="panel-ttl">Grup Bazında — Hakedişe Esas + Kalan Stok Değeri</div>', unsafe_allow_html=True)
+        st.plotly_chart(charts.stok_bar(core.stok_grup_agg(stok)), width="stretch", config=PLOT)
+
+    gsel = st.selectbox("Grup filtresi", ["(Tümü)"] + sorted(se["grup"].unique()), key="stok_grp")
+    only_stok = st.checkbox("Sadece stoku olan kalemler", value=False, key="stok_only")
+    view = se if gsel == "(Tümü)" else se[se["grup"] == gsel]
+    if only_stok:
+        view = view[view["kalan_stok"] > 0]
+    st.caption(f"Görüntülenen: **{len(view)} kalem** · Kalan stok değeri **{core.fmt_money(view['stok_deger'].sum())}**")
+
+    if ADMIN:
+        st.markdown('<div class="panel-ttl">Miktar Girişi — Sahaya Gelen & İmalata Giren</div>', unsafe_allow_html=True)
+        ed = view[["poz", "ad", "grup", "miktar", "birim", "bf", "gelen", "imalat"]].copy()
+        ed_show = st.data_editor(
+            ed, width="stretch", hide_index=True, key="stok_ed",
+            disabled=["poz", "ad", "grup", "miktar", "birim", "bf"],
+            column_config={
+                "poz": "Poz", "ad": st.column_config.TextColumn("Malzeme", width="large"),
+                "grup": "Grup",
+                "miktar": st.column_config.NumberColumn("Sözleşme Mik.", format="%.0f"),
+                "birim": "Birim",
+                "bf": st.column_config.NumberColumn("Birim Fiyat", format="$%.2f"),
+                "gelen": st.column_config.NumberColumn("Sahaya Gelen", min_value=0, format="%.0f"),
+                "imalat": st.column_config.NumberColumn("İmalata Giren", min_value=0, format="%.0f")})
+        if not ed_show[["gelen", "imalat"]].equals(ed[["gelen", "imalat"]]):
+            m = storage.load_stok(conn).set_index("poz")
+            for _, r in ed_show.iterrows():
+                m.loc[r["poz"], ["gelen", "imalat"]] = [r["gelen"], r["imalat"]]
+            storage.save_stok(conn, m.reset_index())
+            st.toast("Stok/imalat güncellendi."); st.rerun()
+    else:
+        rows = ""
+        for _, r in view.head(400).iterrows():
+            mcol = "#fb7185" if not r["mutabakat"] else "#c7e8e4"
+            rows += (f'<tr><td style="color:#5f7a99;font-size:10px">{r["poz"]}</td>'
+                     f'<td class="mx-name" style="font-size:11px;max-width:300px">{r["ad"][:52]}</td>'
+                     f'<td style="text-align:right;color:#9fc3e0;font-size:10.5px">{r["miktar"]:,.0f} {r["birim"]}</td>'
+                     f'<td style="text-align:right;color:#38bdf8;font-size:10.5px">{r["gelen"]:,.0f}</td>'
+                     f'<td style="text-align:right;color:#22d3ee;font-size:10.5px">{r["imalat"]:,.0f}</td>'
+                     f'<td style="text-align:right;color:{mcol};font-size:10.5px">{r["kalan_stok"]:,.0f}</td>'
+                     f'<td style="text-align:right;color:#fbbf24;font-size:10.5px">{core.fmt_money(r["stok_deger"])}</td>'
+                     f'<td style="text-align:right;color:#34d399;font-size:10.5px">{core.fmt_money(r["hakedise_esas"])}</td></tr>')
+        st.markdown(f'<table class="mx"><tr><th>POZ</th><th>MALZEME</th><th style="text-align:right">SÖZLEŞME</th>'
+                    f'<th style="text-align:right">GELEN</th><th style="text-align:right">İMALAT</th>'
+                    f'<th style="text-align:right">KALAN STOK</th><th style="text-align:right">STOK DEĞERİ</th>'
+                    f'<th style="text-align:right">HAKEDİŞE ESAS</th></tr>{rows}</table>', unsafe_allow_html=True)
 
 elif page == "İş Programı":
     st.markdown('<div style="background:linear-gradient(90deg,rgba(34,211,238,.10),rgba(139,92,246,.06));'

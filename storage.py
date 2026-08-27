@@ -211,7 +211,7 @@ def save_table(conn, name, df: pd.DataFrame):
 def export_all(conn) -> dict:
     out = {}
     for t in ("progress", "stock", "hse", "snapshots", "baseline", "changelog",
-              "risks", "ncr", "vo", "payments", "schedule", "yuklenici"):
+              "risks", "ncr", "vo", "payments", "schedule", "yuklenici", "stok_imalat"):
         try:
             out[t] = pd.read_sql(f"SELECT * FROM {t}", conn).to_dict(orient="records")
         except Exception:
@@ -226,7 +226,7 @@ def export_all(conn) -> dict:
 
 def import_all(conn, data: dict):
     for t in ("progress", "stock", "hse", "snapshots", "baseline", "changelog",
-              "risks", "ncr", "vo", "payments", "schedule", "yuklenici"):
+              "risks", "ncr", "vo", "payments", "schedule", "yuklenici", "stok_imalat"):
         if t in data and isinstance(data[t], list) and len(data[t]) > 0:
             df = pd.DataFrame(data[t])
             if not df.empty and len(df.columns) > 0:
@@ -277,4 +277,27 @@ def load_yuklenici(conn):
 
 def save_yuklenici(conn, df):
     df.to_sql("yuklenici", conn, if_exists="replace", index=False)
+    conn.commit()
+
+
+# ── Stok & İmalat (Malzeme Mutabakatı) ──
+def load_stok(conn):
+    """Yüklenici kalemleri bazında stok/imalat miktarları. Yoksa 0'la başlar."""
+    import data_yuklenici
+    try:
+        df = pd.read_sql("SELECT * FROM stok_imalat", conn)
+        if len(df) == 0:
+            raise ValueError("boş")
+        return df
+    except Exception:
+        y = data_yuklenici.yuklenici_df()
+        df = y[["poz", "ad", "grup", "miktar", "birim", "bf", "tutar"]].copy()
+        df["gelen"] = 0.0      # sahaya gelen (tedarik)
+        df["imalat"] = 0.0     # imalata giren (montaj)
+        save_stok(conn, df)
+        return df
+
+
+def save_stok(conn, df):
+    df.to_sql("stok_imalat", conn, if_exists="replace", index=False)
     conn.commit()
