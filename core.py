@@ -544,3 +544,39 @@ def match_progress_excel(sched_df, upload_df):
             sched.iloc[idx, sched.columns.get_loc("gercek")] = val
             matched += 1
     return sched, matched
+
+
+# ══════════════ GES-1 / GES-2 / ORTAK İLERLEME (iş programından) ══════════════
+def ges_progress(sched_df, asof=None):
+    """İş programı faaliyetlerini GES-1 / GES-2 / ORTAK olarak gruplar.
+    ARK-1 → GES-1, ARK-2 → GES-2, Satınalma+Test → ORTAK. Süre-ağırlıklı %."""
+    if sched_df is None or sched_df.empty:
+        return pd.DataFrame(columns=["grp", "short", "realPct", "planPct", "budget"])
+    if asof is None:
+        asof = pd.Timestamp.today().normalize()
+    d = sched_df.copy()
+    d["gercek"] = pd.to_numeric(d["gercek"], errors="coerce").fillna(0)
+    d["plan_pct"] = sched_planned_pct(d, asof)
+    d["w"] = d["sure_gun"].clip(lower=1)
+
+    def zone(g):
+        g = str(g)
+        if "ARK-1" in g:
+            return "GES-1"
+        if "ARK-2" in g:
+            return "GES-2"
+        return "ORTAK"
+    d["zone"] = d["grup"].map(zone)
+    rows = []
+    for z in ["GES-1", "GES-2", "ORTAK"]:
+        sub = d[d["zone"] == z]
+        if sub.empty:
+            continue
+        w = sub["w"].sum()
+        rows.append({
+            "grp": z, "short": z,
+            "realPct": float((sub["gercek"] * sub["w"]).sum() / w) if w else 0,
+            "planPct": float((sub["plan_pct"] * sub["w"]).sum() / w) if w else 0,
+            "budget": float(w),
+        })
+    return pd.DataFrame(rows)

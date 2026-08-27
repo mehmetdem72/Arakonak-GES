@@ -80,7 +80,7 @@ def s_curve(baseline: pd.DataFrame, snaps: pd.DataFrame, today_pv, today_ev, tod
     fig.add_scatter(x=[now], y=[today_ev], name="Bugün", mode="markers",
                     marker=dict(size=13, color=C_OK, line=dict(color="white", width=2)),
                     hovertemplate="Bugün<br>Gerçek %{y:.1f}%<extra></extra>")
-    _style(fig, 360)
+    _style(fig, 420)
     fig.update_yaxes(range=[0, 105], ticksuffix="%", showgrid=True, gridcolor=C_GRID)
     # x eksenini proje aralığına yay + TÜRKÇE ay etiketleri
     if xstart is not None and xend is not None:
@@ -99,50 +99,49 @@ def s_curve(baseline: pd.DataFrame, snaps: pd.DataFrame, today_pv, today_ev, tod
 
 
 def progress_donut(pct, plan_pct=None):
-    """Açık kurumsal halka gösterge — Genel İlerleme."""
+    """Genel Fiziki İlerleme — büyük endüstriyel halka gösterge."""
     pct = max(0, min(100, pct))
+    col = C_OK if (plan_pct is None or pct >= plan_pct) else C_AMB
     fig = go.Figure(go.Pie(
-        values=[pct, 100 - pct], hole=0.72, sort=False, direction="clockwise", rotation=0,
-        marker=dict(colors=[C_OK, C_TRACK], line=dict(color="rgba(0,0,0,0)", width=0)),
+        values=[pct, 100 - pct], hole=0.70, sort=False, direction="clockwise", rotation=0,
+        marker=dict(colors=[col, C_TRACK], line=dict(color="rgba(0,0,0,0)", width=0)),
         textinfo="none", hoverinfo="skip"))
-    ann = [dict(text=f"<b>%{pct:.0f}</b>", x=0.5, y=0.52, font=dict(size=30, color=C_OK, family=FONT), showarrow=False),
-           dict(text="EV / BAC", x=0.5, y=0.36, font=dict(size=11, color="#8aa", family=FONT), showarrow=False)]
+    ann = [dict(text=f"<b>%{pct:.0f}</b>", x=0.5, y=0.54, font=dict(size=46, color=col, family=FONT), showarrow=False),
+           dict(text="FİZİKİ İLERLEME (EV/BAC)", x=0.5, y=0.37, font=dict(size=11, color="#8aa", family=FONT), showarrow=False)]
     if plan_pct is not None:
-        ann.append(dict(text=f"plan %{plan_pct:.0f}", x=0.5, y=0.20,
-                        font=dict(size=10, color=C_PLAN, family=FONT), showarrow=False))
-    fig.update_layout(annotations=ann, height=210, margin=dict(l=6, r=6, t=6, b=6),
+        ann.append(dict(text=f"Plan: %{plan_pct:.0f}", x=0.5, y=0.24,
+                        font=dict(size=12, color=C_PLAN, family=FONT), showarrow=False))
+    fig.update_layout(annotations=ann, height=300, margin=dict(l=6, r=6, t=10, b=6),
                       showlegend=False, paper_bgcolor="rgba(0,0,0,0)", font=dict(family=FONT))
     return fig
 
 
-def group_gauges(gag: pd.DataFrame, top: int = 8):
-    """Grup performansı — çok gruba uygun yatay çubuk (gerçek% + plan çizgisi)."""
+def group_gauges(gag: pd.DataFrame, top: int = 3):
+    """GES-1 / GES-2 / ORTAK yarım-daire performans göstergeleri — endüstriyel, büyük."""
     if gag is None or gag.empty:
-        return _style(go.Figure(), 220)
-    d = gag.sort_values("budget", ascending=True).tail(top)
+        return _style(go.Figure(), 300)
+    d = gag.head(top)
+    cols = ["#22d3ee", "#34d399", "#a78bfa"]
+    n = len(d)
     fig = go.Figure()
-    labels = d["short"].tolist()
-    real = d["realPct"].round(0).tolist()
-    plan = d["planPct"].round(0).tolist()
-    # arka plan (100%)
-    fig.add_trace(go.Bar(y=labels, x=[100] * len(d), orientation="h",
-                         marker=dict(color=C_TRACK), hoverinfo="skip", showlegend=False, width=0.62))
-    # gerçekleşen
-    colors = [C_OK if r >= p else C_AMB for r, p in zip(real, plan)]
-    fig.add_trace(go.Bar(y=labels, x=real, orientation="h",
-                         marker=dict(color=colors),
-                         text=[f"%{v:.0f}" for v in real], textposition="inside",
-                         insidetextanchor="start", textfont=dict(size=11, color="#04222b", family=FONT),
-                         hovertemplate="%{y}<br>Gerçek %{x:.0f}<extra></extra>", showlegend=False, width=0.62))
-    # plan çizgisi (marker)
-    fig.add_trace(go.Scatter(y=labels, x=plan, mode="markers",
-                             marker=dict(symbol="line-ns", size=16, color="#fbbf24",
-                                         line=dict(width=2, color="#fbbf24")),
-                             hovertemplate="%{y}<br>Plan %{x:.0f}<extra></extra>", showlegend=False))
-    _style(fig, max(220, len(d) * 30))
-    fig.update_layout(barmode="overlay", bargap=0.35, margin=dict(l=8, r=10, t=8, b=8))
-    fig.update_xaxes(range=[0, 100], showgrid=False, showticklabels=False)
-    fig.update_yaxes(tickfont=dict(size=10.5, color=C_INK))
+    for i, (_, r) in enumerate(d.iterrows()):
+        real = round(float(r["realPct"]), 0)
+        plan = round(float(r["planPct"]), 0)
+        fig.add_trace(go.Indicator(
+            mode="gauge+number", value=real,
+            number={"suffix": "%", "font": {"size": 34, "color": cols[i % 3], "family": FONT}},
+            title={"text": f"<span style='color:#a7bad4;font-size:14px;font-weight:700'>{r['short']}</span>"},
+            domain={"row": 0, "column": i},
+            gauge={"axis": {"range": [0, 100], "tickwidth": 0, "tickcolor": "rgba(0,0,0,0)",
+                            "tickfont": {"size": 1, "color": "rgba(0,0,0,0)"}},
+                   "bar": {"color": cols[i % 3], "thickness": 0.34},
+                   "bgcolor": C_TRACK, "borderwidth": 0,
+                   "steps": [{"range": [0, 100], "color": C_TRACK}],
+                   "threshold": {"line": {"color": "#fbbf24", "width": 4}, "thickness": 0.9,
+                                 "value": plan}}))
+    fig.update_layout(grid={"rows": 1, "columns": n, "pattern": "independent"},
+                      height=300, margin=dict(l=24, r=24, t=50, b=10),
+                      paper_bgcolor="rgba(0,0,0,0)", font=dict(family=FONT))
     return fig
 
 

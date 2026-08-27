@@ -440,35 +440,21 @@ if page == "Komuta Paneli":
                 f'border:1px solid {THEMES[theme]["border"]};border-radius:12px;padding:10px 15px;'
                 f'font-size:12.5px;color:{THEMES[theme]["text"]};margin-bottom:10px">🧭 <b>Yönetici Özeti:</b> '
                 f'{core.narrative(k, scope_label)}</div>', unsafe_allow_html=True)
-    al = core.alerts(scoped, k)
-    acol = {"risk": ("#fb7185", "rgba(251,113,133,.12)"), "izle": ("#fbbf24", "rgba(251,191,36,.12)"),
-            "iyi": ("#34d399", "rgba(52,211,153,.12)")}
-    chips = "".join(f'<span style="display:inline-block;background:{acol[l][1]};border:1px solid {acol[l][0]};'
-                    f'color:{acol[l][0]};padding:5px 11px;border-radius:8px;font-size:11px;font-weight:700;'
-                    f'margin:0 6px 6px 0">{"●" if l=="risk" else "▲" if l=="izle" else "✓"} {m}</span>'
-                    for l, m in al)
-    st.markdown(f'<div style="margin-bottom:12px">{chips}</div>', unsafe_allow_html=True)
+    # Üst şerit: Toplam Bütçe · Kazanılan (EV) · Kalan İş (grafiklerin üstünde)
+    st.markdown(
+        f'<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
+        f'<div style="flex:1;min-width:200px;background:rgba(56,189,248,.08);border:1px solid #123a44;'
+        f'border-radius:10px;padding:11px 16px"><span style="color:#38bdf8;font-size:10.5px;font-weight:700;letter-spacing:.5px">TOPLAM BÜTÇE</span>'
+        f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(k["budget"])}</div></div>'
+        f'<div style="flex:1;min-width:200px;background:rgba(34,211,238,.08);border:1px solid #123a44;'
+        f'border-radius:10px;padding:11px 16px"><span style="color:#22d3ee;font-size:10.5px;font-weight:700;letter-spacing:.5px">KAZANILAN (EV)</span>'
+        f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(k["comp"])}</div></div>'
+        f'<div style="flex:1;min-width:200px;background:rgba(251,113,133,.08);border:1px solid #402028;'
+        f'border-radius:10px;padding:11px 16px"><span style="color:#fb7185;font-size:10.5px;font-weight:700;letter-spacing:.5px">KALAN İŞ</span>'
+        f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(k["kalan"])}</div></div>'
+        f'</div>', unsafe_allow_html=True)
 
-    # İki taraflı özet: İşveren keşfi vs Yüklenici hakedişi (aynı satır)
-    try:
-        _yuk_bac = base["tutar"].sum()
-        _yuk_ev = (base["tutar"] * base["real"] / 100).sum()
-        import data_isveren
-        _isv_bac = data_isveren.isveren_df()["tutar"].sum()
-        st.markdown(
-            f'<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">'
-            f'<div style="flex:1;min-width:220px;background:rgba(167,139,250,.08);border:1px solid #2a2a44;'
-            f'border-radius:10px;padding:10px 15px"><span style="color:#a78bfa;font-size:10.5px;font-weight:700">İŞVEREN KEŞFİ</span>'
-            f'<div style="color:#e6f4f4;font-size:16px;font-weight:800">{core.fmt_money(_isv_bac)}</div></div>'
-            f'<div style="flex:1;min-width:220px;background:rgba(34,211,238,.08);border:1px solid #123a44;'
-            f'border-radius:10px;padding:10px 15px"><span style="color:#22d3ee;font-size:10.5px;font-weight:700">YÜKLENİCİ HAKEDİŞİ</span>'
-            f'<div style="color:#e6f4f4;font-size:16px;font-weight:800">{core.fmt_money(_yuk_bac)} '
-            f'<span style="font-size:11px;color:#7fb0b3">· hak edilen {core.fmt_money(_yuk_ev)}</span></div></div>'
-            f'</div>', unsafe_allow_html=True)
-    except Exception:
-        pass
-
-    hero = st.columns([1.45, 1.5, 1], gap="medium")
+    hero = st.columns([1, 1.15], gap="medium")
     with hero[0]:
         with st.container(border=True):
             st.markdown('<div class="panel-ttl">Genel Fiziki İlerleme</div>', unsafe_allow_html=True)
@@ -480,17 +466,11 @@ if page == "Komuta Paneli":
                         unsafe_allow_html=True)
     with hero[1]:
         with st.container(border=True):
-            st.markdown('<div class="panel-ttl">Grup Performans Göstergeleri</div>', unsafe_allow_html=True)
-            st.plotly_chart(charts.group_gauges(gag), width="stretch", config=PLOT)
-    with hero[2]:
-        st.markdown(f"""
-        <div class="kbox"><div class="kl">TOPLAM BÜTÇE</div>
-          <div class="kv" style="color:#38bdf8">{core.fmt_money(k['budget'])}</div></div>
-        <div class="kbox"><div class="kl">KAZANILAN (EV)</div>
-          <div class="kv" style="color:#22d3ee">{core.fmt_money(k['comp'])}</div></div>
-        <div class="kbox"><div class="kl">KALAN İŞ</div>
-          <div class="kv" style="color:#fb7185">{core.fmt_money(k['kalan'])}</div></div>
-        """, unsafe_allow_html=True)
+            st.markdown('<div class="panel-ttl">GES-1 / GES-2 / ORTAK İlerleme</div>', unsafe_allow_html=True)
+            _sched = storage.load_schedule(conn)
+            _ges = core.ges_progress(_sched, pd.Timestamp.today().normalize())
+            st.plotly_chart(charts.group_gauges(_ges), width="stretch", config=PLOT)
+            st.caption("Sarı çizgi = plana göre olması gereken · Renkli dolgu = gerçekleşen (İş Programı'ndan).")
 
     with st.container(border=True):
         st.markdown('<div class="panel-ttl">Kümülatif S-Eğrisi</div>', unsafe_allow_html=True)
