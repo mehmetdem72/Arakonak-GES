@@ -444,18 +444,23 @@ if page == "Komuta Paneli":
     spi_arrow = "" if k["SPI"] is None else ("▲" if k["SPI"] >= 1 else "▼")
     spi_col = MUTED if k["SPI"] is None else (TEAL if k["SPI"] >= 1 else RED)
 
-    # Üst şerit: Toplam Bütçe · Kazanılan (EV) · Kalan İş (grafiklerin üstünde)
+    # Üst şerit: Toplam Bütçe · Kazanılan (EV) · Kalan İş — YÜKLENİCİ HAKEDİŞ bedelinden ($10.25M)
+    _hk_strip = storage.load_hakedis(conn)
+    _hoz_strip = core.hakedis_ozet(_hk_strip)
+    _bac_y = _hoz_strip["bac"]                    # $10.25M sözleşme bedeli
+    _ev_y = _hoz_strip["hakedise_esas"]           # hakedişe esas imalat
+    _kalan_y = _bac_y - _ev_y
     st.markdown(
         f'<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
         f'<div style="flex:1;min-width:200px;background:rgba(56,189,248,.08);border:1px solid #123a44;'
         f'border-radius:10px;padding:11px 16px"><span style="color:#38bdf8;font-size:10.5px;font-weight:700;letter-spacing:.5px">TOPLAM BÜTÇE</span>'
-        f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(k["budget"])}</div></div>'
+        f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(_bac_y)}</div></div>'
         f'<div style="flex:1;min-width:200px;background:rgba(34,211,238,.08);border:1px solid #123a44;'
         f'border-radius:10px;padding:11px 16px"><span style="color:#22d3ee;font-size:10.5px;font-weight:700;letter-spacing:.5px">KAZANILAN (EV)</span>'
-        f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(k["comp"])}</div></div>'
+        f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(_ev_y)}</div></div>'
         f'<div style="flex:1;min-width:200px;background:rgba(251,113,133,.08);border:1px solid #402028;'
         f'border-radius:10px;padding:11px 16px"><span style="color:#fb7185;font-size:10.5px;font-weight:700;letter-spacing:.5px">KALAN İŞ</span>'
-        f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(k["kalan"])}</div></div>'
+        f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(_kalan_y)}</div></div>'
         f'</div>', unsafe_allow_html=True)
 
     hero = st.columns([1, 1.15], gap="medium")
@@ -703,9 +708,10 @@ elif page == "Hakedişe Esas İmalat":
 elif page == "Stok Durumu":
     st.markdown('<div style="background:linear-gradient(90deg,rgba(251,191,36,.10),rgba(52,211,153,.05));'
                 'border:1px solid #12324a;border-radius:12px;padding:11px 16px;font-size:12.5px;'
-                'color:#cfe3f7;margin-bottom:14px">📦 <b>Stok Durumu:</b> '
-                'Depoya/yükleniciye teslim edilen ve sahada imalatı yapılan miktarları girin. '
-                'Kalan stok, yüzde ve değer otomatik hesaplanır. <i>Kural: Teslim = İmalat + Kalan Stok</i>.</div>',
+                'color:#cfe3f7;margin-bottom:14px">📦 <b>Stok Durumu (sorumluluk bazlı):</b> '
+                '<span style="color:#fbbf24">İşveren</span> kalemlerinde: Depoya Gelen → Yükleniciye Verilen → İmalata Giren '
+                '(depoda kalan + yüklenicide bekleyen ayrı hesaplanır). '
+                '<span style="color:#22d3ee">Yüklenici</span> kalemlerinde: sadece Sahada İmalata Giren.</div>',
                 unsafe_allow_html=True)
     stok = storage.load_stok(conn)
     se = core.stok_enrich(stok)
@@ -718,28 +724,30 @@ elif page == "Stok Durumu":
         st.plotly_chart(charts.group_gauges(_ges), width="stretch", config=PLOT, key="ges_stok")
 
     c = st.columns(4)
-    c[0].metric("Teslim Edilen Değer", core.fmt_money(oz["gelen_deger"]))
-    c[1].metric("Sahada İmalat (esas)", core.fmt_money(oz["hakedise_esas"]))
-    c[2].metric("Kalan Stok Değeri", core.fmt_money(oz["stok_deger"]),
-                help="Sahada bekleyen, henüz imal edilmemiş malzeme bedeli")
-    c[3].metric("Stok Devir Oranı", f"%{oz['devir']:.0f}")
+    c[0].metric("İşveren Teslim Değeri", core.fmt_money(oz["gelen_deger"]),
+                help="İşverenin tedarik edip depoya aldığı malzeme değeri")
+    c[1].metric("Depoda Bekleyen", core.fmt_money(oz["depoda_deger"]),
+                help="İşveren deposunda, henüz yükleniciye verilmemiş")
+    c[2].metric("Yüklenicide Bekleyen", core.fmt_money(oz["yuklenicide_deger"]),
+                help="Yükleniciye verilmiş ama henüz imalata girmemiş")
+    c[3].metric("Sahada İmalat (esas)", core.fmt_money(oz["hakedise_esas"]))
     if oz["mutabakatsiz"] > 0:
         st.markdown(f'<div style="background:rgba(251,113,133,.12);border:1px solid #fb7185;border-radius:10px;'
                     f'padding:9px 13px;font-size:12px;color:#fecdd3;margin:6px 0 10px">🔴 <b>Mutabakatsızlık:</b> '
-                    f'{oz["mutabakatsiz"]} kalemde imalat, teslim edilenden fazla.</div>', unsafe_allow_html=True)
+                    f'{oz["mutabakatsiz"]} kalemde imalat > verilen veya verilen > gelen. Kontrol edin.</div>', unsafe_allow_html=True)
 
-    f1, f2, f3 = st.columns([1.4, 1.4, 1])
-    grp_view = f1.selectbox("Grup", ["(Tümü)"] + sorted(se["grup"].unique().tolist()), key="st_grp")
+    f1, f2, f3 = st.columns([1.3, 1.3, 1.2])
+    sor_view = f1.selectbox("Sorumluluk", ["(Tümü)", "İşveren", "Yüklenici"], key="st_sor")
     ara = f2.text_input("Malzeme adında ara", key="st_ara", placeholder="ör. panel...")
-    only_stok = f3.checkbox("Sadece stoklu", value=False, key="st_only")
-    view = se if grp_view == "(Tümü)" else se[se["grup"] == grp_view]
+    only_isv = f3.checkbox("Sadece stoklu (işveren)", value=False, key="st_only")
+    view = se if sor_view == "(Tümü)" else se[se["sorumluluk"] == sor_view]
     if ara:
         view = view[view["ad"].str.contains(ara, case=False, na=False)]
-    if only_stok:
+    if only_isv:
         view = view[view["kalan_stok"] > 0]
-    st.caption(f"Görüntülenen: {len(view)} kalem · Kalan stok {core.fmt_money(view['stok_deger'].sum())}".replace("$", "\\$"))
+    st.caption(f"Görüntülenen: {len(view)} kalem · İşveren stok değeri {core.fmt_money(view['stok_deger'].sum())}".replace("$", "\\$"))
 
-    edit_mode = st.toggle("✏️ Düzenleme modu — teslim & imalat girişi", value=False, key="st_edit") if ADMIN else False
+    edit_mode = st.toggle("✏️ Düzenleme modu", value=False, key="st_edit") if ADMIN else False
     PAGE = 40
     pages_n = max(1, (len(view) + PAGE - 1) // PAGE)
     pg = st.number_input(f"Sayfa (her sayfada {PAGE} kalem · toplam {pages_n} sayfa)", 1, pages_n, 1, key="st_pg") if len(view) > PAGE else 1
@@ -748,56 +756,75 @@ elif page == "Stok Durumu":
     if edit_mode:
         for _, r in sl.iterrows():
             st.session_state.setdefault(f"sg_{r['poz']}", float(r["gelen"]))
+            st.session_state.setdefault(f"sv_{r['poz']}", float(r["veren"]))
             st.session_state.setdefault(f"si_{r['poz']}", float(r["imalat"]))
-        h = st.columns([2.6, 0.9, 0.7, 1.2, 1.2, 1.0, 1.1, 0.8])
-        h[0].markdown("**Malzeme**"); h[1].markdown("**Sözleşme**"); h[2].markdown("**Birim**")
-        h[3].markdown("**Teslim Edilen**"); h[4].markdown("**Sahada İmalat**"); h[5].markdown("**Kalan**")
-        h[6].markdown("**Stok $**"); h[7].markdown("**Kaydet**")
+        h = st.columns([2.4, 0.8, 0.9, 1.15, 1.15, 1.15, 1.15, 0.7])
+        h[0].markdown("**Malzeme**"); h[1].markdown("**Sorumlu**"); h[2].markdown("**Sözleşme**")
+        h[3].markdown("**Depoya Gelen**"); h[4].markdown("**Yük.'ye Verilen**"); h[5].markdown("**İmalata Giren**")
+        h[6].markdown("**Kalan**"); h[7].markdown("**💾**")
         for _, r in sl.iterrows():
-            poz = r["poz"]
+            poz = r["poz"]; is_isv = r["sorumluluk"] == "İşveren"
             gelen = st.session_state.get(f"sg_{poz}", r["gelen"])
+            veren = st.session_state.get(f"sv_{poz}", r["veren"])
             imalat = st.session_state.get(f"si_{poz}", r["imalat"])
-            kalan = max(0, gelen - imalat)
-            mut_bad = imalat > gelen + 1e-6
-            cc = st.columns([2.6, 0.9, 0.7, 1.2, 1.2, 1.0, 1.1, 0.8])
-            cc[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{r["ad"][:46]}</div>', unsafe_allow_html=True)
-            cc[1].markdown(f'<div style="font-size:11px;padding-top:8px;color:#9fc3e0;text-align:right">{r["miktar"]:,.0f}</div>', unsafe_allow_html=True)
-            cc[2].markdown(f'<div style="font-size:11px;padding-top:8px;color:#7fb0b3">{r["birim"]}</div>', unsafe_allow_html=True)
-            cc[3].number_input("g", min_value=0.0, step=100.0, key=f"sg_{poz}", label_visibility="collapsed")
-            cc[4].number_input("i", min_value=0.0, step=100.0, key=f"si_{poz}", label_visibility="collapsed")
-            kcol = "#fb7185" if mut_bad else "#c7e8e4"
-            cc[5].markdown(f'<div style="font-size:11px;padding-top:8px;color:{kcol};text-align:right">{kalan:,.0f}</div>', unsafe_allow_html=True)
-            cc[6].markdown(f'<div style="font-size:11px;padding-top:8px;color:#fbbf24;text-align:right">{core.fmt_money(kalan*r["bf"])}</div>', unsafe_allow_html=True)
-            if cc[7].button("💾", key=f"stsave_{poz}", help="Bu kalemi kaydet"):
+            cc = st.columns([2.4, 0.8, 0.9, 1.15, 1.15, 1.15, 1.15, 0.7])
+            cc[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{r["ad"][:42]}</div>', unsafe_allow_html=True)
+            _scol = "#fbbf24" if is_isv else "#22d3ee"
+            cc[1].markdown(f'<div style="font-size:10px;padding-top:9px;font-weight:700;color:{_scol}">{"İşv" if is_isv else "Yük"}</div>', unsafe_allow_html=True)
+            cc[2].markdown(f'<div style="font-size:11px;padding-top:8px;color:#9fc3e0;text-align:right">{r["miktar"]:,.0f}</div>', unsafe_allow_html=True)
+            if is_isv:
+                # İşveren: 3 giriş (gelen, veren, imalat)
+                cc[3].number_input("g", min_value=0.0, step=100.0, key=f"sg_{poz}", label_visibility="collapsed")
+                cc[4].number_input("v", min_value=0.0, step=100.0, key=f"sv_{poz}", label_visibility="collapsed")
+                cc[5].number_input("i", min_value=0.0, step=100.0, key=f"si_{poz}", label_visibility="collapsed")
+                depoda = max(0, gelen - veren); yukte = max(0, veren - imalat)
+                bad = imalat > veren + 1e-6 or veren > gelen + 1e-6
+                kcol = "#fb7185" if bad else "#c7e8e4"
+                cc[6].markdown(f'<div style="font-size:10px;padding-top:6px;color:{kcol};text-align:right;line-height:1.3">'
+                               f'depo {depoda:,.0f}<br>yük {yukte:,.0f}</div>', unsafe_allow_html=True)
+            else:
+                # Yüklenici: sadece imalat girişi
+                cc[3].markdown('<div style="font-size:10px;padding-top:9px;color:#3d556e;text-align:center">—</div>', unsafe_allow_html=True)
+                cc[4].markdown('<div style="font-size:10px;padding-top:9px;color:#3d556e;text-align:center">—</div>', unsafe_allow_html=True)
+                cc[5].number_input("i", min_value=0.0, step=100.0, key=f"si_{poz}", label_visibility="collapsed")
+                pct = (imalat / r["miktar"] * 100) if r["miktar"] else 0
+                cc[6].markdown(f'<div style="font-size:11px;padding-top:8px;color:#34d399;text-align:right">%{pct:.0f}</div>', unsafe_allow_html=True)
+            if cc[7].button("💾", key=f"stsave_{poz}", help="Kaydet"):
                 m = storage.load_stok(conn).set_index("poz")
                 g = max(0.0, float(st.session_state.get(f"sg_{poz}", 0)))
+                v = max(0.0, float(st.session_state.get(f"sv_{poz}", 0)))
                 i = max(0.0, float(st.session_state.get(f"si_{poz}", 0)))
-                if abs(g - float(m.loc[poz, "gelen"])) > 1e-6 or abs(i - float(m.loc[poz, "imalat"])) > 1e-6:
-                    m.loc[poz, ["gelen", "imalat"]] = [g, i]
-                    storage.save_stok(conn, m.reset_index())
-                    st.toast(f"✅ Kaydedildi: {r['ad'][:30]}")
-                    st.rerun()
-                else:
-                    st.toast("Değişiklik yok.")
+                if not is_isv:
+                    g = 0.0; v = 0.0
+                m.loc[poz, ["gelen", "veren", "imalat"]] = [g, v, i]
+                storage.save_stok(conn, m.reset_index())
+                st.toast(f"✅ Kaydedildi: {r['ad'][:30]}")
+                st.rerun()
     else:
         rows = ""
         for _, r in sl.iterrows():
-            mcol = "#fb7185" if not r["mutabakat"] else "#c7e8e4"
+            is_isv = r["sorumluluk"] == "İşveren"
+            scol = "#fbbf24" if is_isv else "#22d3ee"
             iw = max(0, min(100, r["imalat_pct"]))
+            mcol = "#fb7185" if not r["mutabakat"] else "#c7e8e4"
+            gelen_c = f'{r["gelen"]:,.0f}' if is_isv else "—"
+            veren_c = f'{r["veren"]:,.0f}' if is_isv else "—"
+            depo_yuk = f'{r["depoda_kalan"]:,.0f} / {r["yuklenicide"]:,.0f}' if is_isv else "—"
             rows += (f'<tr><td style="color:#5f7a99;font-size:10px">{r["poz"]}</td>'
-                     f'<td class="mx-name" style="font-size:11px;max-width:250px">{r["ad"][:46]}</td>'
+                     f'<td class="mx-name" style="font-size:11px;max-width:230px">{r["ad"][:44]}</td>'
+                     f'<td style="text-align:center;color:{scol};font-size:9.5px;font-weight:700">{"İşveren" if is_isv else "Yüklenici"}</td>'
                      f'<td style="text-align:right;color:#9fc3e0;font-size:10.5px">{r["miktar"]:,.0f} {r["birim"]}</td>'
-                     f'<td style="text-align:right;color:#38bdf8;font-size:10.5px">{r["gelen"]:,.0f}</td>'
+                     f'<td style="text-align:right;color:#38bdf8;font-size:10.5px">{gelen_c}</td>'
+                     f'<td style="text-align:right;color:#a78bfa;font-size:10.5px">{veren_c}</td>'
                      f'<td style="text-align:right;color:#22d3ee;font-size:10.5px">{r["imalat"]:,.0f}</td>'
-                     f'<td style="text-align:right;color:{mcol};font-size:10.5px">{r["kalan_stok"]:,.0f}</td>'
-                     f'<td style="min-width:80px"><div style="position:relative;background:#0e2233;border-radius:5px;height:15px;overflow:hidden">'
+                     f'<td style="text-align:center;color:{mcol};font-size:9.5px">{depo_yuk}</td>'
+                     f'<td style="min-width:70px"><div style="position:relative;background:#0e2233;border-radius:5px;height:15px;overflow:hidden">'
                      f'<div style="position:absolute;left:0;top:0;height:100%;width:{iw:.0f}%;background:#34d399;border-radius:5px"></div>'
-                     f'<span style="position:absolute;left:6px;top:0;line-height:15px;font-size:9px;font-weight:800;color:#e8f4ff">%{iw:.0f}</span></div></td>'
-                     f'<td style="text-align:right;color:#fbbf24;font-size:10.5px">{core.fmt_money(r["stok_deger"])}</td></tr>')
-        st.markdown(f'<table class="mx"><tr><th>POZ</th><th>MALZEME</th><th style="text-align:right">SÖZLEŞME</th>'
-                    f'<th style="text-align:right">TESLİM</th><th style="text-align:right">İMALAT</th>'
-                    f'<th style="text-align:right">KALAN STOK</th><th>İMALAT %</th>'
-                    f'<th style="text-align:right">STOK $</th></tr>{rows}</table>', unsafe_allow_html=True)
+                     f'<span style="position:absolute;left:6px;top:0;line-height:15px;font-size:9px;font-weight:800;color:#e8f4ff">%{iw:.0f}</span></div></td></tr>')
+        st.markdown(f'<table class="mx"><tr><th>POZ</th><th>MALZEME</th><th style="text-align:center">SORUMLU</th>'
+                    f'<th style="text-align:right">SÖZLEŞME</th><th style="text-align:right">GELEN</th>'
+                    f'<th style="text-align:right">VERİLEN</th><th style="text-align:right">İMALAT</th>'
+                    f'<th style="text-align:center">DEPO/YÜK</th><th>İMALAT %</th></tr>{rows}</table>', unsafe_allow_html=True)
 
 elif page == "Rapor & Yedek":
     st.markdown('<div class="panel-ttl">📊 Rapor İndir — Excel / PDF</div>', unsafe_allow_html=True)

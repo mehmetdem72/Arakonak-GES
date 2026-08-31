@@ -518,28 +518,48 @@ def ges_progress(df, asof=None):
 
 # ══════════════ STOK & İMALAT (MALZEME MUTABAKATI) ══════════════
 def stok_enrich(df):
-    """Stok tablosunu zenginleştirir: kalan stok, imalat %, stok değeri, hakedişe esas."""
+    """Stok tablosu — sorumluluk bazlı.
+    İŞVEREN kalemi: depoya gelen → yükleniciye verilen → imalata giren.
+      depoda kalan = gelen − veren · yüklenicide bekleyen = veren − imalat.
+    YÜKLENİCİ kalemi: sadece imalata giren (stok takibi yok)."""
     d = df.copy()
     for c in ("miktar", "bf", "tutar", "gelen", "imalat"):
         d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0.0)
-    d["kalan_stok"] = (d["gelen"] - d["imalat"]).clip(lower=0)
+    if "veren" not in d.columns:
+        d["veren"] = 0.0
+    d["veren"] = pd.to_numeric(d["veren"], errors="coerce").fillna(0.0)
+    if "sorumluluk" not in d.columns:
+        d["sorumluluk"] = "Yüklenici"
+    is_isv = d["sorumluluk"] == "İşveren"
+
+    # İşveren kalemi: depoda kalan + yüklenicide bekleyen ayrı
+    d["depoda_kalan"] = (d["gelen"] - d["veren"]).clip(lower=0).where(is_isv, 0.0)
+    d["yuklenicide"] = (d["veren"] - d["imalat"]).clip(lower=0).where(is_isv, 0.0)
+    # toplam kalan stok (işveren: gelen−imalat, yüklenici: 0 — stok takibi yok)
+    d["kalan_stok"] = (d["gelen"] - d["imalat"]).clip(lower=0).where(is_isv, 0.0)
+
     d["imalat_pct"] = (d["imalat"] / d["miktar"].replace(0, pd.NA) * 100).fillna(0).clip(0, 100)
     d["gelen_pct"] = (d["gelen"] / d["miktar"].replace(0, pd.NA) * 100).fillna(0).clip(0, 100)
-    d["stok_deger"] = d["kalan_stok"] * d["bf"]              # sahada bekleyen malzeme değeri
+    d["stok_deger"] = d["kalan_stok"] * d["bf"]              # sahada/depoda bekleyen malzeme değeri
     d["hakedise_esas"] = d["imalat"] * d["bf"]               # yapılan imalatın parasal karşılığı
-    # mutabakat: imalat gelenden fazla olamaz
-    d["mutabakat"] = d["imalat"] <= d["gelen"] + 1e-6
+    # mutabakat: işveren kaleminde imalat ≤ veren ≤ gelen olmalı
+    d["mutabakat"] = True
+    d.loc[is_isv & (d["imalat"] > d["veren"] + 1e-6), "mutabakat"] = False
+    d.loc[is_isv & (d["veren"] > d["gelen"] + 1e-6), "mutabakat"] = False
     return d
 
 
 def stok_ozet(df):
     """Stok sayfası üst kartları için özet."""
     d = stok_enrich(df)
+    is_isv = d["sorumluluk"] == "İşveren"
     return {
-        "gelen_deger": float((d["gelen"] * d["bf"]).sum()),
+        "gelen_deger": float((d.loc[is_isv, "gelen"] * d.loc[is_isv, "bf"]).sum()),
+        "depoda_deger": float((d["depoda_kalan"] * d["bf"]).sum()),
+        "yuklenicide_deger": float((d["yuklenicide"] * d["bf"]).sum()),
         "hakedise_esas": float(d["hakedise_esas"].sum()),
         "stok_deger": float(d["stok_deger"].sum()),
-        "devir": float(d["imalat"].sum() / d["gelen"].sum() * 100) if d["gelen"].sum() > 0 else 0.0,
+        "devir": float(d.loc[is_isv, "imalat"].sum() / d.loc[is_isv, "gelen"].sum() * 100) if d.loc[is_isv, "gelen"].sum() > 0 else 0.0,
         "mutabakatsiz": int((~d["mutabakat"]).sum()),
     }
 

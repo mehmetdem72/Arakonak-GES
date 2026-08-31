@@ -282,18 +282,33 @@ def save_yuklenici(conn, df):
 
 # ── Stok & İmalat (Malzeme Mutabakatı) ──
 def load_stok(conn):
-    """Yüklenici kalemleri bazında stok/imalat miktarları. Yoksa 0'la başlar."""
-    import data_yuklenici
+    """Yüklenici kalemleri bazında stok. sorumluluk (İşveren/Yüklenici) + gelen/veren/imalat."""
+    import data_yuklenici, re
+    # İşveren sorumluluğundaki poz çekirdekleri (NAS_DIŞ_TEDARİK)
+    _ISV_CORES = {"SLR.3600", "SLR.4400", "ELK.7222", "ELK.7422", "ELK.7512",
+                  "ELK.7513", "ELK.7515", "ELK.7522", "ELK.7524", "ELK.7541"}
+
+    def _core(p):
+        p = str(p).upper(); p = re.sub(r'^(PR|ARK)\.', '', p)
+        p = re.sub(r'[-.](TN|SM|TM|T|N|D|M)$', '', p); p = re.sub(r'-\d+', '', p)
+        return p
     try:
         df = pd.read_sql("SELECT * FROM stok_imalat", conn)
         if len(df) == 0:
             raise ValueError("boş")
+        # eski kayıtta yeni sütunlar yoksa ekle
+        if "sorumluluk" not in df.columns:
+            df["sorumluluk"] = df["poz"].map(lambda p: "İşveren" if _core(p) in _ISV_CORES else "Yüklenici")
+        if "veren" not in df.columns:
+            df["veren"] = 0.0
         return df
     except Exception:
         y = data_yuklenici.yuklenici_df()
         df = y[["poz", "ad", "grup", "miktar", "birim", "bf", "tutar"]].copy()
-        df["gelen"] = 0.0      # sahaya gelen (tedarik)
-        df["imalat"] = 0.0     # imalata giren (montaj)
+        df["sorumluluk"] = df["poz"].map(lambda p: "İşveren" if _core(p) in _ISV_CORES else "Yüklenici")
+        df["gelen"] = 0.0      # depoya gelen (işveren tedarik)
+        df["veren"] = 0.0      # yükleniciye verilen (işveren tedarik)
+        df["imalat"] = 0.0     # sahada imalata giren
         save_stok(conn, df)
         return df
 
