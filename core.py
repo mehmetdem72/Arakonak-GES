@@ -591,13 +591,25 @@ def hakedis_grup_agg(df):
 
 def hakedis_ges_progress(hk_df, isp_df):
     """Hakediş imalatını GES-1/GES-2/ORTAK olarak gruplar.
-    hk_df: hakediş (imalat) tablosu, isp_df: iş programı (poz→GES eşlemesi için grp)."""
+    Hakediş poz (ARK.xxx) → İş Programı poz (PR.xxx) çekirdek eşlemesiyle GES bulunur.
+    Eşleşmeyen kalemler ORTAK sayılır."""
     if hk_df is None or hk_df.empty:
         return pd.DataFrame(columns=["grp", "short", "realPct", "planPct", "budget"])
+    import re
+
+    def core_poz(p):
+        p = str(p).upper()
+        p = re.sub(r'^(PR|ARK)\.', '', p)
+        p = re.sub(r'[-.](TN|SM|TM|N|D|M)$', '', p)
+        p = re.sub(r'-\d+', '', p)
+        return p
+    # İş programı: her GES için poz çekirdekleri
+    ges_by_core = {}
+    if isp_df is not None and not isp_df.empty:
+        for _, r in isp_df.iterrows():
+            ges_by_core.setdefault(core_poz(r["id"]), r["grp"])
     h = hakedis_enrich(hk_df)
-    # poz → GES eşlemesi (iş programı grp sütunundan)
-    ges_map = dict(zip(isp_df["id"].astype(str), isp_df["grp"].astype(str))) if isp_df is not None and not isp_df.empty else {}
-    h["ges"] = h["poz"].astype(str).map(ges_map).fillna("GES-1")
+    h["ges"] = h["poz"].map(lambda p: ges_by_core.get(core_poz(p), "ORTAK"))
     rows = []
     for z in ["GES-1", "GES-2", "ORTAK"]:
         sub = h[h["ges"] == z]
@@ -609,7 +621,6 @@ def hakedis_ges_progress(hk_df, isp_df):
         rows.append({
             "grp": z, "short": z,
             "realPct": float(sub["hakedise_esas"].sum() / b * 100),
-            "planPct": 0.0,
-            "budget": b,
+            "planPct": 0.0, "budget": b,
         })
     return pd.DataFrame(rows)

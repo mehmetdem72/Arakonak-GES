@@ -475,18 +475,7 @@ if page == "Komuta Paneli":
             st.plotly_chart(charts.group_gauges(_ges), width="stretch", config=PLOT, key="ges_fiziki")
             st.caption("Sarı çizgi = plan · Renkli dolgu = gerçekleşen (İş Programına Göre İlerleme sayfasından).")
 
-    # Hakedişe esas imalat — GES-1/GES-2/ORTAK fiziki ilerleme formatında
-    with st.container(border=True):
-        _hk = storage.load_hakedis(conn)
-        _hoz = core.hakedis_ozet(_hk)
-        st.markdown(f'<div class="panel-ttl">Hakedişe Esas İmalat — GES-1 / GES-2 / ORTAK '
-                    f'<span style="font-size:11px;color:#34d399;font-weight:600">· '
-                    f'{core.fmt_money(_hoz["hakedise_esas"])} / {core.fmt_money(_hoz["bac"])} (%{_hoz["imalat_pct"]:.1f})</span></div>',
-                    unsafe_allow_html=True)
-        _hges = core.hakedis_ges_progress(_hk, base)
-        st.plotly_chart(charts.group_gauges(_hges), width="stretch", config=PLOT, key="ges_hakedis")
-        st.caption("İmalatı yapılan (hakedişe esas) tutarın GES bazında oranı — Hakedişe Esas İmalat sayfasından.")
-
+    # Hakedişe esas imalat — grup bazında (yüklenici tek poz kullandığı için GES bölünmez)
     with st.container(border=True):
         st.markdown('<div class="panel-ttl">Kümülatif S-Eğrisi</div>', unsafe_allow_html=True)
         gran = gran_buttons("dash_scurve")
@@ -520,9 +509,8 @@ elif page == "İş Programına Göre İlerleme":
     st.markdown('<div style="background:linear-gradient(90deg,rgba(34,211,238,.10),rgba(139,92,246,.06));'
                 'border:1px solid #12324a;border-radius:12px;padding:11px 16px;font-size:12.5px;'
                 'color:#cfe3f7;margin-bottom:14px">📅 <b>İş Programına Göre İlerleme:</b> '
-                'Yüklenici hakedişindeki 122 kalem (rakamlar hakedişten). Düzenleme modunda her kaleme '
-                '<b>Plan %</b>, <b>Gerçek %</b> girin ve <b>GES</b> (GES-1/GES-2/ORTAK) seçin — '
-                'Komuta Paneli\'ndeki GES göstergeleri buradan beslenir.</div>',
+                'İşveren yaklaşık maliyetindeki 197 kalem — <b>GES-1 (73), GES-2 (73), ORTAK (51)</b> gerçek ayrımıyla. '
+                'Her kaleme <b>Plan %</b> ve <b>Gerçek %</b> girin; Komuta Paneli\'ndeki GES göstergeleri buradan beslenir.</div>',
                 unsafe_allow_html=True)
     kpi_ribbon()
 
@@ -589,21 +577,19 @@ elif page == "İş Programına Göre İlerleme":
             sl = view.iloc[(pg - 1) * PAGE: pg * PAGE]
             st.caption(f"{(pg-1)*PAGE+1}–{min(pg*PAGE, total)} arası kalemler gösteriliyor.")
         # başlık satırı
-        h = st.columns([2.6, 1.0, 1.1, 1.2, 1.0, 1.0, 0.8])
+        h = st.columns([2.8, 1.0, 0.9, 1.2, 1.0, 1.0, 0.8])
         h[0].markdown("**Poz Adı**"); h[1].markdown("**Miktar**"); h[2].markdown("**GES**")
         h[3].markdown("**Tutar**")
         h[4].markdown("**Plan %**"); h[5].markdown("**Gerçek %**"); h[6].markdown("**Kaydet**")
-        _ges_opts = ["GES-1", "GES-2", "ORTAK"]
+        _gcol = {"GES-1": "#22d3ee", "GES-2": "#34d399", "ORTAK": "#a78bfa"}
         for _, r in sl.iterrows():
             rid = r["id"]
             st.session_state.setdefault(f"ep_{rid}", int(round(r["plan"])))
             st.session_state.setdefault(f"er_{rid}", int(round(r["real"])))
-            _cur_ges = r["grp"] if r["grp"] in _ges_opts else "GES-1"
-            st.session_state.setdefault(f"eg_{rid}", _cur_ges)
-            c = st.columns([2.6, 1.0, 1.1, 1.2, 1.0, 1.0, 0.8])
+            c = st.columns([2.8, 1.0, 0.9, 1.2, 1.0, 1.0, 0.8])
             c[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{r["name"][:48]}</div>', unsafe_allow_html=True)
             c[1].markdown(f'<div style="font-size:11px;padding-top:8px;color:#9fc3e0;text-align:right">{r["qty"]:,.0f} {r["unit"]}</div>', unsafe_allow_html=True)
-            c[2].selectbox("g", _ges_opts, key=f"eg_{rid}", label_visibility="collapsed")
+            c[2].markdown(f'<div style="font-size:11px;padding-top:8px;font-weight:700;color:{_gcol.get(r["grp"], "#7fb0b3")}">{r["grp"]}</div>', unsafe_allow_html=True)
             c[3].markdown(f'<div style="font-size:11px;padding-top:8px;color:#c7e8e4;text-align:right">{core.fmt_money(r["tutar"])}</div>', unsafe_allow_html=True)
             c[4].number_input("p", 0, 100, key=f"ep_{rid}", label_visibility="collapsed")
             c[5].number_input("r", 0, 100, key=f"er_{rid}", label_visibility="collapsed")
@@ -612,16 +598,13 @@ elif page == "İş Programına Göre İlerleme":
                 nm = str(old["name"])[:40]
                 p = max(0.0, min(100.0, float(st.session_state.get(f"ep_{rid}", old["plan"]))))
                 rl = max(0.0, min(100.0, float(st.session_state.get(f"er_{rid}", old["real"]))))
-                new_ges = st.session_state.get(f"eg_{rid}", old["grp"])
                 changed = False
                 if abs(p - float(old["plan"])) > 1e-9:
                     storage.log_change(conn, user["username"], nm, "Plan %", f"{old['plan']:.0f}", f"{p:.0f}"); changed = True
                 if abs(rl - float(old["real"])) > 1e-9:
                     storage.log_change(conn, user["username"], nm, "Gerçek %", f"{old['real']:.0f}", f"{rl:.0f}"); changed = True
-                if new_ges != old["grp"]:
-                    storage.log_change(conn, user["username"], nm, "GES", str(old["grp"]), str(new_ges)); changed = True
                 if changed:
-                    st.session_state.df.loc[st.session_state.df["id"] == rid, ["plan", "real", "grp"]] = [p, rl, new_ges]
+                    st.session_state.df.loc[st.session_state.df["id"] == rid, ["plan", "real"]] = [p, rl]
                     persist_progress()
                     st.toast(f"✅ Kaydedildi: {nm}")
                     st.rerun()
