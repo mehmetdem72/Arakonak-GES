@@ -587,3 +587,29 @@ def hakedis_grup_agg(df):
     ).reset_index().sort_values("bac", ascending=False)
     g["pct"] = (g["imalat"] / g["bac"] * 100).fillna(0)
     return g
+
+
+def hakedis_ges_progress(hk_df, isp_df):
+    """Hakediş imalatını GES-1/GES-2/ORTAK olarak gruplar.
+    hk_df: hakediş (imalat) tablosu, isp_df: iş programı (poz→GES eşlemesi için grp)."""
+    if hk_df is None or hk_df.empty:
+        return pd.DataFrame(columns=["grp", "short", "realPct", "planPct", "budget"])
+    h = hakedis_enrich(hk_df)
+    # poz → GES eşlemesi (iş programı grp sütunundan)
+    ges_map = dict(zip(isp_df["id"].astype(str), isp_df["grp"].astype(str))) if isp_df is not None and not isp_df.empty else {}
+    h["ges"] = h["poz"].astype(str).map(ges_map).fillna("GES-1")
+    rows = []
+    for z in ["GES-1", "GES-2", "ORTAK"]:
+        sub = h[h["ges"] == z]
+        if sub.empty:
+            continue
+        b = float(sub["tutar"].sum())
+        if b <= 0:
+            continue
+        rows.append({
+            "grp": z, "short": z,
+            "realPct": float(sub["hakedise_esas"].sum() / b * 100),
+            "planPct": 0.0,
+            "budget": b,
+        })
+    return pd.DataFrame(rows)
