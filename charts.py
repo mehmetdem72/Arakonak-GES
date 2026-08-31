@@ -206,3 +206,19 @@ def stok_bar(g):
     fig.update_xaxes(tickprefix="$", tickformat=".2s", showgrid=True, gridcolor=C_GRID, rangemode="tozero")
     fig.update_layout(barmode="stack", bargap=0.3, legend=dict(orientation="h", y=1.08))
     return fig
+
+
+def hakedis_bar(g):
+    """Grup bazında hakedişe esas (imalat) + kalan tutar — yatay yığılı çubuk."""
+    fig = go.Figure()
+    if g is None or g.empty:
+        _style(fig, 300); return fig
+    d = g.sort_values("bac", ascending=True).tail(10)
+    fig.add_trace(go.Bar(y=d["grup"], x=d["imalat"], name="Hakedişe Esas (imalat)", orientation="h",
+                         marker=dict(color=C_OK), hovertemplate="%{y}<br>İmalat: $%{x:,.0f}<extra></extra>"))
+    fig.add_trace(go.Bar(y=d["grup"], x=d["kalan"], name="Kalan (imal edilmemiş)", orientation="h",
+                         marker=dict(color="#334155"), hovertemplate="%{y}<br>Kalan: $%{x:,.0f}<extra></extra>"))
+    _style(fig, max(300, len(d) * 34))
+    fig.update_xaxes(tickprefix="$", tickformat=".2s", showgrid=True, gridcolor=C_GRID, rangemode="tozero")
+    fig.update_layout(barmode="stack", bargap=0.3, legend=dict(orientation="h", y=1.1))
+    return fig

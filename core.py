@@ -20,9 +20,9 @@ COLS = ["id", "grp", "disc", "name", "unit", "qty", "up", "plan", "real"]
 
 # ────────────────────────────── VERİ ──────────────────────────────
 def seed_df() -> pd.DataFrame:
-    """Ana çalışma tablosu — YÜKLENİCİ (Arakonak 1-2 GES) hakediş kalemlerinden."""
-    import data_yuklenici
-    df = pd.DataFrame(data_yuklenici.progress_rows())[COLS].copy()
+    """Ana ilerleme tablosu — İŞ PROGRAMI (işveren yaklaşık maliyeti, GES-1/GES-2/ORTAK)."""
+    import data_isprogram
+    df = pd.DataFrame(data_isprogram.progress_rows())[COLS].copy()
     for c in ("qty", "up", "plan", "real"):
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
     df["ac"] = 0.0
@@ -489,37 +489,29 @@ def match_progress_excel(sched_df, upload_df):
 
 
 # ══════════════ GES-1 / GES-2 / ORTAK İLERLEME (iş programından) ══════════════
-def ges_progress(sched_df, asof=None):
-    """İş programı faaliyetlerini GES-1 / GES-2 / ORTAK olarak gruplar.
-    ARK-1 → GES-1, ARK-2 → GES-2, Satınalma+Test → ORTAK. Süre-ağırlıklı %."""
-    if sched_df is None or sched_df.empty:
+def ges_progress(df, asof=None):
+    """İş Programı kalemlerini GES-1 / GES-2 / ORTAK olarak gruplar (bütçe-ağırlıklı).
+    df: ana ilerleme tablosu (enrich edilmiş) — grp sütunu GES-1/GES-2/ORTAK."""
+    if df is None or df.empty:
         return pd.DataFrame(columns=["grp", "short", "realPct", "planPct", "budget"])
-    if asof is None:
-        asof = pd.Timestamp.today().normalize()
-    d = sched_df.copy()
-    d["gercek"] = pd.to_numeric(d["gercek"], errors="coerce").fillna(0)
-    d["plan_pct"] = sched_planned_pct(d, asof)
-    d["w"] = d["sure_gun"].clip(lower=1)
-
-    def zone(g):
-        g = str(g)
-        if "ARK-1" in g:
-            return "GES-1"
-        if "ARK-2" in g:
-            return "GES-2"
-        return "ORTAK"
-    d["zone"] = d["grup"].map(zone)
+    d = df.copy()
+    if "tutar" not in d.columns:
+        d["tutar"] = d["qty"] * d["up"]
+    for c in ("plan", "real"):
+        d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0)
     rows = []
     for z in ["GES-1", "GES-2", "ORTAK"]:
-        sub = d[d["zone"] == z]
+        sub = d[d["grp"] == z]
         if sub.empty:
             continue
-        w = sub["w"].sum()
+        b = float(sub["tutar"].sum())
+        if b <= 0:
+            continue
         rows.append({
             "grp": z, "short": z,
-            "realPct": float((sub["gercek"] * sub["w"]).sum() / w) if w else 0,
-            "planPct": float((sub["plan_pct"] * sub["w"]).sum() / w) if w else 0,
-            "budget": float(w),
+            "realPct": float((sub["tutar"] * sub["real"]).sum() / b / 100 * 100) if b else 0,
+            "planPct": float((sub["tutar"] * sub["plan"]).sum() / b / 100 * 100) if b else 0,
+            "budget": b,
         })
     return pd.DataFrame(rows)
 
@@ -561,4 +553,37 @@ def stok_grup_agg(df):
         imalat=("hakedise_esas", "sum"),
         stok=("stok_deger", "sum"),
     ).reset_index().sort_values("gelen", ascending=False)
+    return g
+
+
+# ══════════════ HAKEDİŞE ESAS İMALAT (yüklenici) ══════════════
+def hakedis_enrich(df):
+    """Yüklenici imalat: kalan miktar, imalat %, hakedişe esas tutar."""
+    d = df.copy()
+    for c in ("miktar", "bf", "tutar", "imalat"):
+        d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0.0)
+    d["kalan"] = (d["miktar"] - d["imalat"]).clip(lower=0)
+    d["imalat_pct"] = (d["imalat"] / d["miktar"].replace(0, pd.NA) * 100).fillna(0).clip(0, 100)
+    d["hakedise_esas"] = d["imalat"] * d["bf"]          # yapılan imalatın parasal karşılığı
+    d["kalan_tutar"] = d["kalan"] * d["bf"]
+    return d
+
+
+def hakedis_ozet(df):
+    d = hakedis_enrich(df)
+    bac = float(d["tutar"].sum())
+    he = float(d["hakedise_esas"].sum())
+    return {
+        "bac": bac, "hakedise_esas": he,
+        "kalan_tutar": float(d["kalan_tutar"].sum()),
+        "imalat_pct": (he / bac * 100) if bac else 0.0,
+    }
+
+
+def hakedis_grup_agg(df):
+    d = hakedis_enrich(df)
+    g = d.groupby("grup").agg(
+        bac=("tutar", "sum"), imalat=("hakedise_esas", "sum"), kalan=("kalan_tutar", "sum"),
+    ).reset_index().sort_values("bac", ascending=False)
+    g["pct"] = (g["imalat"] / g["bac"] * 100).fillna(0)
     return g

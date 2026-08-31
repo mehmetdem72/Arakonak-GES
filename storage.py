@@ -301,3 +301,25 @@ def load_stok(conn):
 def save_stok(conn, df):
     df.to_sql("stok_imalat", conn, if_exists="replace", index=False)
     conn.commit()
+
+
+# ── Hakedişe Esas İmalat (yüklenici 122 kalem) ──
+def load_hakedis(conn):
+    """Yüklenici hakediş kalemleri — imalatı yapılan miktar. Yoksa 0'la başlar."""
+    import data_yuklenici
+    try:
+        df = pd.read_sql("SELECT * FROM hakedis_imalat", conn)
+        if len(df) == 0:
+            raise ValueError("boş")
+        return df
+    except Exception:
+        y = data_yuklenici.yuklenici_df()
+        df = y[["poz", "ad", "grup", "miktar", "birim", "bf", "tutar"]].copy()
+        df["imalat"] = 0.0     # imalatı yapılan miktar
+        save_hakedis(conn, df)
+        return df
+
+
+def save_hakedis(conn, df):
+    df.to_sql("hakedis_imalat", conn, if_exists="replace", index=False)
+    conn.commit()
