@@ -222,3 +222,29 @@ def hakedis_bar(g):
     fig.update_xaxes(tickprefix="$", tickformat=".2s", showgrid=True, gridcolor=C_GRID, rangemode="tozero")
     fig.update_layout(barmode="stack", bargap=0.3, legend=dict(orientation="h", y=1.1))
     return fig
+
+
+def grup_bars(g, top=8):
+    """Grup bazında ilerleme — en büyük N grup, yatay çubuk (gerçek% + plan çizgisi)."""
+    fig = go.Figure()
+    if g is None or g.empty:
+        _style(fig, 300); return fig
+    d = g.sort_values("budget", ascending=True).tail(top)
+    labels = d["short"].tolist()
+    real = d["realPct"].round(0).tolist()
+    plan = d["planPct"].round(0).tolist()
+    fig.add_trace(go.Bar(y=labels, x=[100]*len(d), orientation="h",
+                         marker=dict(color=C_TRACK), hoverinfo="skip", showlegend=False, width=0.6))
+    colors = [C_OK if r >= p else C_AMB for r, p in zip(real, plan)]
+    fig.add_trace(go.Bar(y=labels, x=real, orientation="h", marker=dict(color=colors),
+                         text=[f"%{v:.0f}" for v in real], textposition="inside", insidetextanchor="start",
+                         textfont=dict(size=11, color="#04222b", family=FONT),
+                         hovertemplate="%{y}<br>Gerçek %{x:.0f}<extra></extra>", showlegend=False, width=0.6))
+    fig.add_trace(go.Scatter(y=labels, x=plan, mode="markers",
+                             marker=dict(symbol="line-ns", size=18, color="#fbbf24", line=dict(width=2, color="#fbbf24")),
+                             hovertemplate="%{y}<br>Plan %{x:.0f}<extra></extra>", showlegend=False))
+    _style(fig, max(300, len(d)*34))
+    fig.update_layout(barmode="overlay", bargap=0.32, margin=dict(l=8, r=10, t=8, b=8))
+    fig.update_xaxes(range=[0, 100], showgrid=False, showticklabels=False)
+    fig.update_yaxes(tickfont=dict(size=11, color=C_INK))
+    return fig

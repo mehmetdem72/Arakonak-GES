@@ -475,10 +475,10 @@ if page == "Komuta Paneli":
                         unsafe_allow_html=True)
     with hero[1]:
         with st.container(border=True):
-            st.markdown('<div class="panel-ttl">İşin Fiziki İlerlemesi — GES-1 / GES-2 / ORTAK</div>', unsafe_allow_html=True)
-            _ges = core.ges_progress(base)
-            st.plotly_chart(charts.group_gauges(_ges), width="stretch", config=PLOT, key="ges_fiziki")
-            st.caption("Sarı çizgi = plan · Renkli dolgu = gerçekleşen (İş Programına Göre İlerleme sayfasından).")
+            st.markdown('<div class="panel-ttl">İşin Fiziki İlerlemesi — Grup Bazında</div>', unsafe_allow_html=True)
+            _gag = core.group_agg(base)
+            st.plotly_chart(charts.grup_bars(_gag), width="stretch", config=PLOT, key="grup_fiziki")
+            st.caption("Sarı çizgi = plan · Renkli dolgu = gerçekleşen · grup bazında (İş Programı sayfasından).")
 
     # Hakedişe esas imalat — grup bazında (yüklenici tek poz kullandığı için GES bölünmez)
     with st.container(border=True):
@@ -514,19 +514,16 @@ elif page == "İş Programına Göre İlerleme":
     st.markdown('<div style="background:linear-gradient(90deg,rgba(34,211,238,.10),rgba(139,92,246,.06));'
                 'border:1px solid #12324a;border-radius:12px;padding:11px 16px;font-size:12.5px;'
                 'color:#cfe3f7;margin-bottom:14px">📅 <b>İş Programına Göre İlerleme:</b> '
-                'İşveren yaklaşık maliyetindeki 197 kalem — <b>GES-1 (73), GES-2 (73), ORTAK (51)</b> gerçek ayrımıyla. '
-                'Her kaleme <b>Plan %</b> ve <b>Gerçek %</b> girin; Komuta Paneli\'ndeki GES göstergeleri buradan beslenir.</div>',
+                'Yüklenici hakedişindeki 122 kalem (miktar ve fiyatlar hakedişten · $10.25M). '
+                'Her kaleme <b>Plan %</b> ve <b>Gerçek %</b> girin; Komuta Paneli\'ndeki grup göstergeleri buradan beslenir.</div>',
                 unsafe_allow_html=True)
     kpi_ribbon()
 
     # Filtreler
-    f1, f2, f3 = st.columns([1, 2, 2])
-    grp_view = f1.selectbox("GES", ["(Tümü)"] + sorted(base["grp"].unique().tolist()), index=0)
-    disc_view = f2.selectbox("Grup", ["(Tümü)"] + sorted(scoped["disc"].unique().tolist()), index=0)
+    f1, f2, f3 = st.columns([1.4, 1.4, 1.4])
+    grp_view = f1.selectbox("Grup", ["(Tümü)"] + sorted(base["grp"].unique().tolist()), index=0)
     search = f3.text_input("🔎 Poz adında ara", "")
     view = base if grp_view == "(Tümü)" else base[base["grp"] == grp_view]
-    if disc_view != "(Tümü)":
-        view = view[view["disc"] == disc_view]
     if search.strip():
         view = view[view["name"].str.contains(search.strip(), case=False, na=False)]
 
@@ -583,7 +580,7 @@ elif page == "İş Programına Göre İlerleme":
             st.caption(f"{(pg-1)*PAGE+1}–{min(pg*PAGE, total)} arası kalemler gösteriliyor.")
         # başlık satırı
         h = st.columns([2.8, 1.0, 0.9, 1.2, 1.0, 1.0, 0.8])
-        h[0].markdown("**Poz Adı**"); h[1].markdown("**Miktar**"); h[2].markdown("**GES**")
+        h[0].markdown("**Poz Adı**"); h[1].markdown("**Miktar**"); h[2].markdown("**Grup**")
         h[3].markdown("**Tutar**")
         h[4].markdown("**Plan %**"); h[5].markdown("**Gerçek %**"); h[6].markdown("**Kaydet**")
         _gcol = {"GES-1": "#22d3ee", "GES-2": "#34d399", "ORTAK": "#a78bfa"}
@@ -594,7 +591,7 @@ elif page == "İş Programına Göre İlerleme":
             c = st.columns([2.8, 1.0, 0.9, 1.2, 1.0, 1.0, 0.8])
             c[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{r["name"][:48]}</div>', unsafe_allow_html=True)
             c[1].markdown(f'<div style="font-size:11px;padding-top:8px;color:#9fc3e0;text-align:right">{r["qty"]:,.0f} {r["unit"]}</div>', unsafe_allow_html=True)
-            c[2].markdown(f'<div style="font-size:11px;padding-top:8px;font-weight:700;color:{_gcol.get(r["grp"], "#7fb0b3")}">{r["grp"]}</div>', unsafe_allow_html=True)
+            c[2].markdown(f'<div style="font-size:11px;padding-top:8px;font-weight:700;color:{_gcol.get(r["grp"], "#7fb0b3")}">{str(r["grp"])[:10]}</div>', unsafe_allow_html=True)
             c[3].markdown(f'<div style="font-size:11px;padding-top:8px;color:#c7e8e4;text-align:right">{core.fmt_money(r["tutar"])}</div>', unsafe_allow_html=True)
             c[4].number_input("p", 0, 100, key=f"ep_{rid}", label_visibility="collapsed")
             c[5].number_input("r", 0, 100, key=f"er_{rid}", label_visibility="collapsed")
@@ -719,9 +716,9 @@ elif page == "Stok Durumu":
 
     # Üstte GES-1/GES-2/ORTAK genel grafik (ana ilerlemeden)
     with st.container(border=True):
-        st.markdown('<div class="panel-ttl">GES-1 / GES-2 / ORTAK İlerleme</div>', unsafe_allow_html=True)
-        _ges = core.ges_progress(base)
-        st.plotly_chart(charts.group_gauges(_ges), width="stretch", config=PLOT, key="ges_stok")
+        st.markdown('<div class="panel-ttl">Grup Bazında İlerleme</div>', unsafe_allow_html=True)
+        _gag = core.group_agg(base)
+        st.plotly_chart(charts.grup_bars(_gag), width="stretch", config=PLOT, key="grup_stok")
 
     c = st.columns(4)
     c[0].metric("İşveren Teslim Değeri", core.fmt_money(oz["gelen_deger"]),
