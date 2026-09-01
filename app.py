@@ -196,6 +196,31 @@ def inject_css(theme="dark"):
     [data-baseweb="select"] *{{color:{t['text']} !important;}}
     [data-baseweb="popover"] li{{background:{t['panel']} !important;color:{t['text']} !important;}}
     .row-edit{{border-bottom:1px solid {t['rowb']};padding:2px 0;}}
+    /* File uploader Türkçeleştirme */
+    [data-testid="stFileUploaderDropzoneInstructions"] span{{visibility:hidden;position:relative;}}
+    [data-testid="stFileUploaderDropzoneInstructions"] span::after{{
+      visibility:visible;position:absolute;left:0;top:0;white-space:nowrap;
+      content:"Dosyayı buraya sürükleyin";color:{t['text']};}}
+    [data-testid="stFileUploaderDropzoneInstructions"] small{{visibility:hidden;position:relative;}}
+    [data-testid="stFileUploaderDropzoneInstructions"] small::after{{
+      visibility:visible;position:absolute;left:0;top:0;white-space:nowrap;
+      content:"Dosya başına en fazla 10MB";color:{t['muted']};font-size:11px;}}
+    [data-testid="stFileUploader"] button{{font-size:0 !important;position:relative;min-width:120px;}}
+    [data-testid="stFileUploader"] button::after{{content:"Dosya Seç";font-size:13px;color:{t['text']};
+      position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;}}
+    /* Butonlar daha okunur ve tıklanabilir hissi */
+    .stButton button, .stDownloadButton button, .stFormSubmitButton button{{
+      font-weight:600 !important;transition:all .12s ease;}}
+    .stButton button:hover, .stDownloadButton button:hover{{
+      border-color:{t['acc']} !important;transform:translateY(-1px);}}
+    /* Tablo okunabilirlik */
+    table.mx{{border-collapse:collapse;width:100%;font-size:11px;}}
+    table.mx th{{background:{t['railhov']};color:{t['muted']};font-size:9.5px;letter-spacing:.4px;
+      padding:7px 8px;text-transform:uppercase;position:sticky;top:0;border-bottom:2px solid {t['acc']};}}
+    table.mx td{{padding:6px 8px;border-bottom:1px solid {t['rowb']};}}
+    table.mx tr:hover td{{background:{t['railhov']};}}
+    /* Popover ve expander daha belirgin */
+    [data-testid="stPopover"] button{{border:1px solid {t['border']} !important;}}
     @media (max-width:1250px){{.kpi-grid{{grid-template-columns:repeat(2,1fr);}}}}
     </style>""", unsafe_allow_html=True)
 
@@ -839,7 +864,7 @@ elif page == "Rapor & Yedek":
         st.download_button("⬇️ Excel (.xlsx) indir", xls, file_name=f"ARAKONAK_GES_{ts}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             width="stretch", type="primary")
-        st.caption("7 sayfa: Özet · İş Kalemleri · Disiplin · Grup · Geciken İşler · Stok · İSG")
+        st.caption("İş Programı ilerlemesi, hakedişe esas imalat, stok durumu ve grup özetleri.")
     with d2:
         with st.spinner("PDF hazırlanıyor…"):
             pdf = exports.build_pdf(state)
@@ -849,15 +874,15 @@ elif page == "Rapor & Yedek":
 
     st.divider()
     st.markdown('<div class="panel-ttl">💾 Yedek & Geri Yükleme</div>', unsafe_allow_html=True)
-    st.warning("Streamlit Cloud deposu geçici olabilir. **Kalıcı güvence için düzenli Tam Yedek (JSON) indirin** "
-               "veya aşağıdan Google Sheets kalıcı senkronunu kurun.")
+    st.warning("💡 Verileriniz sunucuda geçici tutulur. **Düzenli olarak Tam Yedek dosyasını indirin** "
+               "(ör. her hafta) — böylece bir sorun olursa geri yükleyebilirsiniz.")
     b1, b2 = st.columns(2)
     with b1:
         full = json.dumps(storage.export_all(conn), ensure_ascii=False, indent=1).encode("utf-8")
         st.download_button("⬇️ TAM YEDEK (.json) indir — tüm veriler", full,
                            file_name=f"arakonak_TAMYEDEK_{datetime.now():%Y%m%d_%H%M}.json",
                            mime="application/json", width="stretch", type="primary")
-        st.caption("İş kalemleri, stok, İSG, günlük kayıtlar, baseline, risk/NCR/VO/hakediş, kayıt defteri — hepsi.")
+        st.caption("İş programı ilerlemesi · hakedişe esas imalat · stok durumu · ayarlar — tüm veriler tek dosyada.")
     with b2:
         csv = st.session_state.df.to_csv(index=False).encode("utf-8-sig")
         st.download_button("⬇️ Sadece iş kalemleri (CSV)", csv, file_name="arakonak_iskalemleri.csv",
