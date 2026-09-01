@@ -646,22 +646,31 @@ elif page == "Hakedişe Esas İmalat":
                 'border:1px solid #12324a;border-radius:12px;padding:11px 16px;font-size:12.5px;'
                 'color:#cfe3f7;margin-bottom:14px">🏗 <b>Hakedişe Esas İmalat:</b> '
                 'Yüklenici hakedişindeki 122 kalem. Düzenleme modunu açıp her kaleme <b>imalatı yapılan miktarı</b> '
-                'girin — kalan, imalat %% ve hakedişe esas tutar otomatik hesaplanır ve grafiğe yansır.</div>',
+                'girin — kalan, imalat %% ve hakedişe esas tutar otomatik hesaplanır.</div>',
                 unsafe_allow_html=True)
     hk = storage.load_hakedis(conn)
     he = core.hakedis_enrich(hk)
     oz = core.hakedis_ozet(hk)
 
-    c = st.columns(4)
-    c[0].metric("Sözleşme Bedeli (BAC)", core.fmt_money(oz["bac"]))
-    c[1].metric("Hakedişe Esas (imalat)", core.fmt_money(oz["hakedise_esas"]),
-                delta=f"%{oz['imalat_pct']:.1f} imalat", delta_color="off")
-    c[2].metric("Kalan Tutar", core.fmt_money(oz["kalan_tutar"]))
-    c[3].metric("İmalat İlerlemesi", f"%{oz['imalat_pct']:.1f}")
-
-    with st.container(border=True):
-        st.markdown('<div class="panel-ttl">Grup Bazında — Hakedişe Esas + Kalan</div>', unsafe_allow_html=True)
-        st.plotly_chart(charts.hakedis_bar(core.hakedis_grup_agg(hk)), width="stretch", config=PLOT)
+    # Komuta Paneli benzeri: sol donut + sağ KPI kartları
+    hero = st.columns([1.15, 1], gap="medium")
+    with hero[0]:
+        with st.container(border=True):
+            st.markdown('<div class="panel-ttl">Hakedişe Esas İmalat İlerlemesi</div>', unsafe_allow_html=True)
+            st.plotly_chart(charts.hakedis_donut(oz["hakedise_esas"], oz["kalan_tutar"], oz["bac"]),
+                            width="stretch", config=PLOT, key="hakedis_donut")
+            st.caption("Yeşil dolgu = imalatı yapılan (hakedişe esas) · koyu = kalan iş.")
+    with hero[1]:
+        st.markdown(f"""
+        <div class="kbox"><div class="kl">SÖZLEŞME BEDELİ (BAC)</div>
+          <div class="kv" style="color:#38bdf8">{core.fmt_money(oz['bac'])}</div></div>
+        <div class="kbox"><div class="kl">HAKEDİŞE ESAS (İMALAT)</div>
+          <div class="kv" style="color:#34d399">{core.fmt_money(oz['hakedise_esas'])}</div></div>
+        <div class="kbox"><div class="kl">KALAN TUTAR</div>
+          <div class="kv" style="color:#fb7185">{core.fmt_money(oz['kalan_tutar'])}</div></div>
+        <div class="kbox"><div class="kl">İMALAT İLERLEMESİ</div>
+          <div class="kv" style="color:#22d3ee">%{oz['imalat_pct']:.1f}</div></div>
+        """, unsafe_allow_html=True)
 
     f1, f2, f3 = st.columns([1.4, 1.4, 1])
     grp_view = f1.selectbox("Grup", ["(Tümü)"] + sorted(he["grup"].unique().tolist()), key="hk_grp")

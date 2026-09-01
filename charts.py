@@ -248,3 +248,22 @@ def grup_bars(g, top=8):
     fig.update_xaxes(range=[0, 100], showgrid=False, showticklabels=False)
     fig.update_yaxes(tickfont=dict(size=11, color=C_INK))
     return fig
+
+
+def hakedis_donut(hakedise_esas, kalan, bac):
+    """Hakedişe esas imalat vs kalan — pasta/donut grafik (panel donut'una benzer)."""
+    he = max(0, hakedise_esas); kl = max(0, kalan)
+    tot = he + kl
+    pct = (he / bac * 100) if bac else 0
+    fig = go.Figure(go.Pie(
+        values=[he, kl] if tot > 0 else [0, 1], hole=0.68, sort=False, direction="clockwise", rotation=0,
+        marker=dict(colors=[C_OK, C_TRACK], line=dict(color="rgba(0,0,0,0)", width=0)),
+        textinfo="none", hoverinfo="skip"))
+    fig.update_layout(
+        annotations=[
+            dict(text=f"<b>%{pct:.1f}</b>", x=0.5, y=0.54, font=dict(size=42, color=C_OK, family=FONT), showarrow=False),
+            dict(text="HAKEDİŞE ESAS", x=0.5, y=0.38, font=dict(size=11, color="#8aa", family=FONT), showarrow=False),
+        ],
+        height=300, margin=dict(l=6, r=6, t=10, b=6), showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)", font=dict(family=FONT))
+    return fig
