@@ -219,8 +219,34 @@ def inject_css(theme="dark"):
       padding:7px 8px;text-transform:uppercase;position:sticky;top:0;border-bottom:2px solid {t['acc']};}}
     table.mx td{{padding:6px 8px;border-bottom:1px solid {t['rowb']};}}
     table.mx tr:hover td{{background:{t['railhov']};}}
-    /* Popover ve expander daha belirgin */
-    [data-testid="stPopover"] button{{border:1px solid {t['border']} !important;}}
+    /* Popover (Ekle/Sil) butonları — HER durumda koyu zemin, okunur yazı */
+    button[data-testid="stPopoverButton"], button[data-testid="stPopoverButton"] *{{
+      background:{t['railhov']} !important;color:{t['text']} !important;border-color:{t['border']} !important;}}
+    button[data-testid="stPopoverButton"]:hover, button[data-testid="stPopoverButton"]:hover *{{
+      background:{t['panel']} !important;color:{t['acc']} !important;border-color:{t['acc']} !important;}}
+    button[data-testid="stPopoverButton"]:focus, button[data-testid="stPopoverButton"]:active,
+    button[data-testid="stPopoverButton"][aria-expanded="true"]{{
+      background:{t['railhov']} !important;color:{t['text']} !important;border-color:{t['acc']} !important;}}
+    button[data-testid="stPopoverButton"][aria-expanded="true"] *{{color:{t['text']} !important;}}
+    /* Dropdown (selectbox) — beyaz olmasın, koyu kalsın */
+    [data-baseweb="select"] > div, [data-baseweb="select"] > div:hover, [data-baseweb="select"] > div:focus-within{{
+      background:{t['railhov']} !important;border:1px solid {t['border']} !important;color:{t['text']} !important;}}
+    [data-baseweb="select"] div[aria-selected], [data-baseweb="select"] span, [data-baseweb="select"] div{{
+      color:{t['text']} !important;}}
+    [data-baseweb="select"] svg{{fill:{t['text']} !important;}}
+    /* Açılır liste koyu */
+    [data-baseweb="popover"] ul, [data-baseweb="menu"]{{background:{t['panel']} !important;}}
+    [data-baseweb="popover"] li, [data-baseweb="menu"] li{{background:{t['panel']} !important;color:{t['text']} !important;}}
+    [data-baseweb="popover"] li:hover, [data-baseweb="menu"] li:hover{{background:{t['railhov']} !important;color:{t['acc']} !important;}}
+    /* Scrollbar görünür (koyu temaya uygun) — tüm kaydırma alanları */
+    ::-webkit-scrollbar{{width:14px;height:14px;}}
+    ::-webkit-scrollbar-track{{background:{t['rail']};}}
+    ::-webkit-scrollbar-thumb{{background:#3a5169;border-radius:7px;border:3px solid {t['rail']};min-height:40px;}}
+    ::-webkit-scrollbar-thumb:hover{{background:{t['acc']};}}
+    [data-testid="stMain"]{{scrollbar-color:#3a5169 {t['rail']};scrollbar-width:auto;}}
+    [data-testid="stMain"]::-webkit-scrollbar{{width:14px;}}
+    [data-testid="stMain"]::-webkit-scrollbar-thumb{{background:#3a5169;border-radius:7px;border:3px solid {t['rail']};}}
+    html, body{{scrollbar-color:#3a5169 {t['rail']};}}
     @media (max-width:1250px){{.kpi-grid{{grid-template-columns:repeat(2,1fr);}}}}
     </style>""", unsafe_allow_html=True)
 
@@ -551,6 +577,7 @@ elif page == "İş Programına Göre İlerleme":
     view = base if grp_view == "(Tümü)" else base[base["grp"] == grp_view]
     if search.strip():
         view = view[view["name"].str.contains(search.strip(), case=False, na=False)]
+    view = view.sort_values("tutar", ascending=False)  # en büyük tutar üstte
 
     # Düzenleme modu + Ekle/Sil aynı satırda
     edit_mode = False
@@ -681,6 +708,7 @@ elif page == "Hakedişe Esas İmalat":
         view = view[view["ad"].str.contains(ara, case=False, na=False)]
     if only_left:
         view = view[(view["imalat_pct"] > 0) & (view["imalat_pct"] < 100)]
+    view = view.sort_values("tutar", ascending=False)  # en büyük tutar üstte
     st.caption(f"Görüntülenen: {len(view)} kalem · Hakedişe esas {core.fmt_money(view['hakedise_esas'].sum())}".replace("$", "\\$"))
 
     edit_mode = st.toggle("✏️ Düzenleme modu — imalat girişi", value=False, key="hk_edit") if ADMIN else False
@@ -776,6 +804,7 @@ elif page == "Stok Durumu":
         view = view[view["ad"].str.contains(ara, case=False, na=False)]
     if only_isv:
         view = view[view["kalan_stok"] > 0]
+    view = view.sort_values("tutar", ascending=False)  # en büyük tutar üstte
     st.caption(f"Görüntülenen: {len(view)} kalem · İşveren stok değeri {core.fmt_money(view['stok_deger'].sum())}".replace("$", "\\$"))
 
     edit_mode = st.toggle("✏️ Düzenleme modu", value=False, key="st_edit") if ADMIN else False
