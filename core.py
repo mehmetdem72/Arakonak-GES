@@ -20,9 +20,9 @@ COLS = ["id", "grp", "disc", "name", "unit", "qty", "up", "plan", "real"]
 
 # ────────────────────────────── VERİ ──────────────────────────────
 def seed_df() -> pd.DataFrame:
-    """Ana ilerleme tablosu — İŞ PROGRAMI (işveren yaklaşık maliyeti, GES-1/GES-2/ORTAK)."""
-    import data_isprogram
-    df = pd.DataFrame(data_isprogram.progress_rows())[COLS].copy()
+    """Ana ilerleme tablosu — BİRİM FİYAT CETVELİ (122 kalem, GES-1/GES-2/ORTAK, pursantajlı)."""
+    import data_maliyet
+    df = pd.DataFrame(data_maliyet.progress_rows())[COLS].copy()
     for c in ("qty", "up", "plan", "real"):
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
     df["ac"] = 0.0
@@ -644,3 +644,73 @@ def hakedis_ges_progress(hk_df, isp_df):
             "planPct": 0.0, "budget": b,
         })
     return pd.DataFrame(rows)
+
+
+# ══════════════ MALİYET/PURSANTAJ TABANLI HESAPLAR (yeni mimari) ══════════════
+def _maliyet_join(df):
+    """Ana ilerleme df'ini (id, real, plan) birim fiyat detayıyla (g1/g2/ort/pursantaj/disc/ad) birleştirir."""
+    import data_maliyet
+    m = data_maliyet.maliyet_df()[["poz", "disc", "ad", "g1", "g2", "ort", "bf", "tutar", "pursantaj"]].copy()
+    m = m.rename(columns={"poz": "id", "ad": "name"})
+    d = df[["id", "plan", "real"]].copy() if "real" in df.columns else df[["id"]].copy()
+    d = d.merge(m, on="id", how="left")
+    for c in ("g1", "g2", "ort", "bf", "tutar", "pursantaj", "plan", "real"):
+        d[c] = pd.to_numeric(d.get(c, 0), errors="coerce").fillna(0.0)
+    d["disc"] = d["disc"].fillna("")
+    d["name"] = d["name"].fillna("")
+    return d
+
+
+def maliyet_enrich(df):
+    """Birim fiyat tablosu — GES bazlı tutar + ilerleme hesabı için."""
+    d = _maliyet_join(df)
+    d["tutar_g1"] = d["g1"] * d["bf"]
+    d["tutar_g2"] = d["g2"] * d["bf"]
+    d["tutar_ort"] = d["ort"] * d["bf"]
+    d["ev"] = d["tutar"] * d["real"] / 100
+    d["pv"] = d["tutar"] * d["plan"] / 100
+    return d
+
+
+def maliyet_ges_progress(df):
+    """GES-1/GES-2/ORTAK tutar-ağırlıklı fiziki ilerleme (Earned Value)."""
+    d = maliyet_enrich(df)
+    rows = []
+    for z, tcol in [("GES-1", "tutar_g1"), ("GES-2", "tutar_g2"), ("ORTAK", "tutar_ort")]:
+        b = float(d[tcol].sum())
+        if b <= 0:
+            continue
+        # bu GES'e düşen kazanılan = Σ(o GES tutarı × real%)
+        ev = float((d[tcol] * d["real"] / 100).sum())
+        pv = float((d[tcol] * d["plan"] / 100).sum())
+        rows.append({"grp": z, "short": z, "budget": b,
+                     "realPct": ev / b * 100, "planPct": pv / b * 100})
+    return pd.DataFrame(rows)
+
+
+def maliyet_ozet(df):
+    """Genel fiziki ilerleme özeti (tutar-ağırlıklı)."""
+    d = maliyet_enrich(df)
+    bac = float(d["tutar"].sum())
+    ev = float(d["ev"].sum())
+    pv = float(d["pv"].sum())
+    return {
+        "bac": bac, "ev": ev, "pv": pv,
+        "ilerleme": ev / bac * 100 if bac else 0,
+        "plan": pv / bac * 100 if bac else 0,
+        "kalan": bac - ev,
+        "spi": ev / pv if pv > 0 else None,
+    }
+
+
+def hakedis_pursantaj(df):
+    """Pursantaj tabanlı hakediş: Σ(pursantaj × gerçek%). Ödemeye esas ilerleme."""
+    d = maliyet_enrich(df)
+    # hak edilen pursantaj = Σ(kalem pursantajı × real%)
+    hak = float((d["pursantaj"] * d["real"] / 100).sum())   # oran (0-1)
+    plan_hak = float((d["pursantaj"] * d["plan"] / 100).sum())
+    return {
+        "hakedis_pct": hak * 100,           # % olarak hak edilen
+        "plan_pct": plan_hak * 100,
+        "toplam_pursantaj": float(d["pursantaj"].sum()) * 100,
+    }
