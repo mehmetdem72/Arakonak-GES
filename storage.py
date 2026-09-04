@@ -80,13 +80,15 @@ def load_progress(conn) -> pd.DataFrame:
     df = pd.read_sql("SELECT * FROM progress", conn)
     if "ac" not in df.columns:
         df["ac"] = 0.0
-    for c in ("qty", "up", "plan", "real", "ac"):
+    if "tutar_resmi" not in df.columns:
+        df["tutar_resmi"] = df.get("qty", 0) * df.get("up", 0)
+    for c in ("qty", "up", "plan", "real", "ac", "tutar_resmi"):
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
     return df
 
 
 def save_progress(conn, df: pd.DataFrame) -> None:
-    cols = ["id", "grp", "disc", "name", "unit", "qty", "up", "plan", "real", "ac"]
+    cols = ["id", "grp", "disc", "name", "unit", "qty", "up", "plan", "real", "ac", "tutar_resmi"]
     df[cols].to_sql("progress", conn, if_exists="replace", index=False)
     conn.commit()
 

@@ -718,7 +718,7 @@ elif page == "Hakedişe Esas İmalat":
                 f'Fark: {_hkp-_fiz:+.1f} puan. Fiziki = birim fiyat, hakediş = pursantaj — farklı olması normaldir.</div>',
                 unsafe_allow_html=True)
 
-    f1, f2 = st.columns([1.5, 1.5])
+    f1, f2, f3 = st.columns([1.4, 1.4, 1])
     disc_view = f1.selectbox("Disiplin", ["(Tümü)"] + sorted(_md["disc"].unique().tolist()), key="hk_disc")
     ara = f2.text_input("Poz adında ara", key="hk_ara", placeholder="ör. panel, kablo...")
     view = _md if disc_view == "(Tümü)" else _md[_md["disc"] == disc_view]
@@ -728,21 +728,52 @@ elif page == "Hakedişe Esas İmalat":
     _he_tutar = float((view["pursantaj"] * view["real"] / 100).sum() * _bac)
     st.caption(("Görüntülenen: %d kalem · Hak edilen %s" % (len(view), core.fmt_money(_he_tutar))).replace("$", "\\$"))
 
+    edit_mode = f3.toggle("✏️ Düzenleme modu", value=False, key="hk_edit") if ADMIN else False
     import data_maliyet as _dm
     _admap = {r["poz"]: r["ad"] for r in _dm.MALIYET}
-    rows = ""
-    for _, r in view.head(400).iterrows():
-        pid = r["id"]; ad = _admap.get(pid, pid)
-        purs = r["pursantaj"] * 100; real = r["real"]; hak_purs = purs * real / 100
-        rows += ('<tr><td style="color:#5f7a99;font-size:10px">' + str(pid) + '</td>'
-                 '<td class="mx-name" style="font-size:11px;max-width:320px">' + str(ad)[:60] + '</td>'
-                 '<td style="text-align:right;color:#a78bfa;font-size:10.5px">%' + ("%.3f" % purs) + '</td>'
-                 '<td style="text-align:center;color:#22d3ee;font-size:10.5px">%' + ("%.0f" % real) + '</td>'
-                 '<td style="text-align:right;color:#34d399;font-size:10.5px">%' + ("%.3f" % hak_purs) + '</td>'
-                 '<td style="text-align:right;color:#c7e8e4;font-size:10.5px">' + core.fmt_money(r["tutar"]) + '</td></tr>')
-    st.markdown('<table class="mx"><tr><th>POZ</th><th>KALEM</th><th style="text-align:right">PURSANTAJ</th>'
-                '<th>GERÇEK %</th><th style="text-align:right">HAK EDİLEN %</th>'
-                '<th style="text-align:right">TUTAR</th></tr>' + rows + '</table>', unsafe_allow_html=True)
+
+    PAGE = 40
+    pages_n = max(1, (len(view) + PAGE - 1) // PAGE)
+    pg = st.number_input(f"Sayfa (her sayfada {PAGE} kalem · toplam {pages_n} sayfa)", 1, pages_n, 1, key="hk_pg") if len(view) > PAGE else 1
+    sl = view.iloc[(pg - 1) * PAGE: pg * PAGE]
+
+    if edit_mode:
+        for _, r in sl.iterrows():
+            st.session_state.setdefault(f"hr_{r['id']}", int(round(r["real"])))
+        h = st.columns([2.8, 1.1, 0.9, 1.1, 1.1, 0.8])
+        h[0].markdown("**Kalem**"); h[1].markdown("**Pursantaj**"); h[2].markdown("**Gerçek %**")
+        h[3].markdown("**Hak Edilen %**"); h[4].markdown("**Tutar**"); h[5].markdown("**Kaydet**")
+        for _, r in sl.iterrows():
+            rid = r["id"]; ad = _admap.get(rid, rid); purs = r["pursantaj"] * 100
+            real = st.session_state.get(f"hr_{rid}", r["real"])
+            hak_purs = purs * real / 100
+            cc = st.columns([2.8, 1.1, 0.9, 1.1, 1.1, 0.8])
+            cc[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{str(ad)[:50]}</div>', unsafe_allow_html=True)
+            cc[1].markdown(f'<div style="font-size:11px;padding-top:8px;color:#a78bfa;text-align:right">%{purs:.3f}</div>', unsafe_allow_html=True)
+            cc[2].number_input("r", 0, 100, key=f"hr_{rid}", label_visibility="collapsed")
+            cc[3].markdown(f'<div style="font-size:11px;padding-top:8px;color:#34d399;text-align:right">%{hak_purs:.3f}</div>', unsafe_allow_html=True)
+            cc[4].markdown(f'<div style="font-size:11px;padding-top:8px;color:#c7e8e4;text-align:right">{core.fmt_money(r["tutar"])}</div>', unsafe_allow_html=True)
+            if cc[5].button("💾", key=f"hksave_{rid}", help="Bu kalemi kaydet"):
+                rl = max(0.0, min(100.0, float(st.session_state.get(f"hr_{rid}", 0))))
+                st.session_state.df.loc[st.session_state.df["id"] == rid, "real"] = rl
+                persist_progress()
+                st.toast(f"✅ Kaydedildi: {str(ad)[:30]}")
+                st.rerun()
+        st.caption("💡 Buradaki Gerçek % İş Programına Göre İlerleme ile aynı veridir — birinde değişince diğeri de güncellenir.")
+    else:
+        rows = ""
+        for _, r in sl.iterrows():
+            pid = r["id"]; ad = _admap.get(pid, pid)
+            purs = r["pursantaj"] * 100; real = r["real"]; hak_purs = purs * real / 100
+            rows += ('<tr><td style="color:#5f7a99;font-size:10px">' + str(pid) + '</td>'
+                     '<td class="mx-name" style="font-size:11px;max-width:320px">' + str(ad)[:60] + '</td>'
+                     '<td style="text-align:right;color:#a78bfa;font-size:10.5px">%' + ("%.3f" % purs) + '</td>'
+                     '<td style="text-align:center;color:#22d3ee;font-size:10.5px">%' + ("%.0f" % real) + '</td>'
+                     '<td style="text-align:right;color:#34d399;font-size:10.5px">%' + ("%.3f" % hak_purs) + '</td>'
+                     '<td style="text-align:right;color:#c7e8e4;font-size:10.5px">' + core.fmt_money(r["tutar"]) + '</td></tr>')
+        st.markdown('<table class="mx"><tr><th>POZ</th><th>KALEM</th><th style="text-align:right">PURSANTAJ</th>'
+                    '<th>GERÇEK %</th><th style="text-align:right">HAK EDİLEN %</th>'
+                    '<th style="text-align:right">TUTAR</th></tr>' + rows + '</table>', unsafe_allow_html=True)
 
 
 elif page == "Stok Durumu":

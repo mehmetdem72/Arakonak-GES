@@ -15,7 +15,7 @@ GROUPS = ["GES-1 EPC", "GES-2 EPC", "ORTAK EPC"]
 GROUP_SHORT = {"GES-1 EPC": "GES-1", "GES-2 EPC": "GES-2", "ORTAK EPC": "ORTAK"}
 SCOPE_MAP = {"Tümü": "ALL", "GES-1": "GES-1 EPC", "GES-2": "GES-2 EPC", "ORTAK": "ORTAK EPC"}
 
-COLS = ["id", "grp", "disc", "name", "unit", "qty", "up", "plan", "real"]
+COLS = ["id", "grp", "disc", "name", "unit", "qty", "up", "plan", "real", "tutar_resmi"]
 
 
 # ────────────────────────────── VERİ ──────────────────────────────
@@ -23,7 +23,7 @@ def seed_df() -> pd.DataFrame:
     """Ana ilerleme tablosu — BİRİM FİYAT CETVELİ (122 kalem, GES-1/GES-2/ORTAK, pursantajlı)."""
     import data_maliyet
     df = pd.DataFrame(data_maliyet.progress_rows())[COLS].copy()
-    for c in ("qty", "up", "plan", "real"):
+    for c in ("qty", "up", "plan", "real", "tutar_resmi"):
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
     df["ac"] = 0.0
     return df
@@ -34,7 +34,10 @@ def enrich(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     if "ac" not in df.columns:
         df["ac"] = 0.0
-    df["tutar"] = df["qty"] * df["up"]              # BAC (poz bütçesi)
+    if "tutar_resmi" in df.columns:
+        df["tutar"] = pd.to_numeric(df["tutar_resmi"], errors="coerce").fillna(df["qty"] * df["up"])
+    else:
+        df["tutar"] = df["qty"] * df["up"]              # BAC (poz bütçesi)
     df["planW"] = df["tutar"] * df["plan"] / 100.0  # PV — Planlanan Değer
     df["realW"] = df["tutar"] * df["real"] / 100.0  # EV — Kazanılmış Değer
     df["comp"] = df["realW"]
