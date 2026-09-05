@@ -667,9 +667,11 @@ def _maliyet_join(df):
 def maliyet_enrich(df):
     """Birim fiyat tablosu — GES bazlı tutar + ilerleme hesabı için."""
     d = _maliyet_join(df)
-    d["tutar_g1"] = d["g1"] * d["bf"]
-    d["tutar_g2"] = d["g2"] * d["bf"]
-    d["tutar_ort"] = d["ort"] * d["bf"]
+    # GES tutarları: resmi tutarı miktar oranına göre böl (yuvarlama kaybı olmasın)
+    mik_top = (d["g1"] + d["g2"] + d["ort"]).replace(0, pd.NA)
+    d["tutar_g1"] = (d["tutar"] * d["g1"] / mik_top).fillna(0.0)
+    d["tutar_g2"] = (d["tutar"] * d["g2"] / mik_top).fillna(0.0)
+    d["tutar_ort"] = (d["tutar"] * d["ort"] / mik_top).fillna(0.0)
     d["ev"] = d["tutar"] * d["real"] / 100
     d["pv"] = d["tutar"] * d["plan"] / 100
     return d
