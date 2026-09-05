@@ -41,7 +41,7 @@ def _verify(plain: str, stored: str) -> bool:
 # YÖNETİCİ (düzenleme yetkili): admin / arakonak2025
 # MİSAFİR (yalnızca görüntüleme): misafir / arakonak2026 · misafir1-2-3 / nas2026
 _DEFAULT_USERS = {
-    "admin":    {"name": "Proje Müdürü",  "role": "admin",  "hash": hash_password("arakonak2025")},
+    "admin":    {"name": "Yönetici",  "role": "admin",  "hash": hash_password("arakonak2025")},
     "misafir":  {"name": "Misafir (Görüntüleyici)", "role": "viewer", "hash": hash_password("arakonak2026")},
     "misafir1": {"name": "Misafir 1",     "role": "viewer", "hash": hash_password("nas2026")},
     "misafir2": {"name": "Misafir 2",     "role": "viewer", "hash": hash_password("nas2026")},

@@ -107,7 +107,7 @@ def progress_donut(pct, plan_pct=None):
         marker=dict(colors=[col, C_TRACK], line=dict(color="rgba(0,0,0,0)", width=0)),
         textinfo="none", hoverinfo="skip"))
     ann = [dict(text=f"<b>%{pct:.0f}</b>", x=0.5, y=0.54, font=dict(size=46, color=col, family=FONT), showarrow=False),
-           dict(text="FİZİKİ İLERLEME (EV/BAC)", x=0.5, y=0.37, font=dict(size=11, color="#8aa", family=FONT), showarrow=False)]
+           dict(text="FİZİKİ İLERLEME", x=0.5, y=0.37, font=dict(size=11, color="#8aa", family=FONT), showarrow=False)]
     if plan_pct is not None:
         ann.append(dict(text=f"Plan: %{plan_pct:.0f}", x=0.5, y=0.24,
                         font=dict(size=12, color=C_PLAN, family=FONT), showarrow=False))

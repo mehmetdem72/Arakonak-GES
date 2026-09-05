@@ -328,8 +328,7 @@ with st.sidebar:
     if _logo_b64:
         st.markdown(f'<div class="rail-logo"><img src="data:image/svg+xml;base64,{_logo_b64}"/></div>',
                     unsafe_allow_html=True)
-    page = st.radio("Menü", [f"{ICON[p]}  {p}" for p in PAGES], label_visibility="collapsed")
-    page = page.split("  ", 1)[1]
+    page = st.radio("Menü", PAGES, label_visibility="collapsed")
 
     st.markdown('<div class="rail-sec">TEMA</div>', unsafe_allow_html=True)
     light_on = st.toggle("☀️ Açık tema", value=(theme == "light"), key="light_toggle")
@@ -383,7 +382,7 @@ def kpi_ribbon():
         <div class="kpi-label">TOPLAM BÜTÇE (BAC)</div><div class="kpi-value">{core.fmt_money(k['budget'])}</div>
         <div class="kpi-sub" style="color:#8aa">Sözleşme bedeli</div></div>
       <div class="kpi-card" style="--c:linear-gradient(90deg,{TEAL},#14b8a6)">
-        <div class="kpi-label">KAZANILAN (EV)</div><div class="kpi-value" style="color:{TEAL}">{core.fmt_money(k['comp'])}</div>
+        <div class="kpi-label">KAZANILAN</div><div class="kpi-value" style="color:{TEAL}">{core.fmt_money(k['comp'])}</div>
         <div class="kpi-sub" style="color:{TEAL}">▲ %{k['ilerleme']:.1f}</div></div>
       <div class="kpi-card" style="--c:linear-gradient(90deg,#0e7490,#14b8a6)">
         <div class="kpi-label">PLANA GÖRE</div><div class="kpi-value">%{k['planPct']:.1f}</div>
@@ -506,7 +505,7 @@ if page == "Komuta Paneli":
         f'border-radius:10px;padding:11px 16px"><span style="color:#38bdf8;font-size:10.5px;font-weight:700;letter-spacing:.5px">TOPLAM BÜTÇE</span>'
         f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(_bac_y)}</div></div>'
         f'<div style="flex:1;min-width:200px;background:rgba(34,211,238,.08);border:1px solid #123a44;'
-        f'border-radius:10px;padding:11px 16px"><span style="color:#22d3ee;font-size:10.5px;font-weight:700;letter-spacing:.5px">KAZANILAN (EV)</span>'
+        f'border-radius:10px;padding:11px 16px"><span style="color:#22d3ee;font-size:10.5px;font-weight:700;letter-spacing:.5px">KAZANILAN</span>'
         f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(_ev_y)}</div></div>'
         f'<div style="flex:1;min-width:200px;background:rgba(251,113,133,.08);border:1px solid #402028;'
         f'border-radius:10px;padding:11px 16px"><span style="color:#fb7185;font-size:10.5px;font-weight:700;letter-spacing:.5px">KALAN İŞ</span>'
