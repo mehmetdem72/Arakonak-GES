@@ -519,25 +519,19 @@ if page == "Komuta Paneli":
             st.markdown('<div class="panel-ttl">Genel Fiziki İlerleme</div>', unsafe_allow_html=True)
             st.plotly_chart(charts.progress_donut(k["ilerleme"], k["planPct"]),
                             width="stretch", config=PLOT)
-            st.markdown(f'<div style="text-align:center">'
-                        f'<span class="nchip">PLANA GÖRE %{k["planPct"]:.0f}</span>'
-                        f'<span class="nchip" style="color:{spi_col}">SPI {spi} {spi_arrow}</span></div>',
-                        unsafe_allow_html=True)
     with hero[1]:
         with st.container(border=True):
             st.markdown('<div class="panel-ttl">İşin Fiziki İlerlemesi — GES-1 / GES-2 / ORTAK</div>', unsafe_allow_html=True)
             _ges = core.maliyet_ges_progress(base)
             st.plotly_chart(charts.group_gauges(_ges), width="stretch", config=PLOT, key="ges_fiziki")
-            st.caption("Tutar-ağırlıklı fiziki ilerleme (Earned Value) · İş Programı sayfasından beslenir.")
 
     with st.container(border=True):
         _hak = core.hakedis_pursantaj(base)
         _ozp = core.maliyet_ozet(base)
-        cc = st.columns(3)
+        cc = st.columns(2)
         cc[0].metric("Fiziki İlerleme (saha)", f"%{_ozp['ilerleme']:.1f}", help="Birim fiyat cetveli · tutar-ağırlıklı")
         cc[1].metric("Hakediş (pursantaj)", f"%{_hak['hakedis_pct']:.2f}", help="Ödemeye esas pursantaj")
-        cc[2].metric("Kazanılan Değer (EV)", core.fmt_money(_ozp['ev']))
-        st.caption("Fiziki = saha (birim fiyat) · Hakediş = ödeme (pursantaj). İkisi farklı olabilir — normaldir.")
+
 
     # Hakedişe esas imalat — grup bazında (yüklenici tek poz kullandığı için GES bölünmez)
     with st.container(border=True):
@@ -548,9 +542,6 @@ if page == "Komuta Paneli":
         st.plotly_chart(charts.s_curve(baseline, snaps_use, k["planPct"], k["ilerleme"],
                                        xstart=meta["start"], xend=meta["end"]),
                         width="stretch", config=PLOT)
-        if baseline.empty:
-            st.caption("💡 Plan çizgisi için aşağıdaki **Plan Programı**'na aylık Plan % girin. "
-                       "Gerçek çizgi İş Kalemleri'ne veri girdikçe ilerler.")
         with st.expander("📅 Plan Programı — aylık planlanan % (plan çizgisini buradan çizin)"):
             _pl_default = [{"Ay": r["Ay"], "Plan %": r["Plan %"]} for r in core.month_rows(meta["start"], meta["end"])]
             _planline = storage.load_table(conn, "planline", _pl_default)
@@ -564,10 +555,6 @@ if page == "Komuta Paneli":
                                                                                 min_value=0, max_value=100, step=1)})
             if ADMIN and not _pl_ed.equals(_planline):
                 storage.save_table(conn, "planline", _pl_ed); st.rerun()
-
-    with st.container(border=True):
-        st.markdown('<div class="panel-ttl">Disiplin Matrisi — Koşullu Biçimlendirme</div>', unsafe_allow_html=True)
-        matrix_table(g)
 
 elif page == "İş Programına Göre İlerleme":
     st.markdown('<div style="background:linear-gradient(90deg,rgba(34,211,238,.10),rgba(139,92,246,.06));'
