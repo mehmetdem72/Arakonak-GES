@@ -248,6 +248,47 @@ def inject_css(theme="dark"):
     [data-testid="stMain"]::-webkit-scrollbar-thumb{{background:#3a5169;border-radius:7px;border:3px solid {t['rail']};}}
     html, body{{scrollbar-color:#3a5169 {t['rail']};}}
     @media (max-width:1250px){{.kpi-grid{{grid-template-columns:repeat(2,1fr);}}}}
+    /* ══ CANLI HOVER EFEKTLERİ — grafikler ve butonlar daha belirgin ══ */
+    /* Bordered container'lar (grafik kapları) — hover'da yüksel + parla */
+    div[data-testid="stVerticalBlockBorderWrapper"],
+    div[data-testid="stVerticalBlock"] > div[style*="border"],
+    .stElementContainer:has(.stPlotlyChart){{
+      transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;}}
+    div[data-testid="stVerticalBlockBorderWrapper"]:hover{{
+      transform:translateY(-4px);
+      box-shadow:0 16px 40px rgba(34,211,238,.18), 0 0 0 1px {t['acc']}55;
+      border-color:{t['acc']} !important;}}
+    /* Plotly grafik alanı hover'da hafif büyür + gölge */
+    .stPlotlyChart{{transition:transform .25s ease, filter .25s ease;border-radius:12px;}}
+    .stPlotlyChart:hover{{transform:scale(1.02);filter:drop-shadow(0 8px 22px rgba(34,211,238,.30));}}
+    /* KPI kutuları (kbox) — daha belirgin hover */
+    .kbox{{transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}}
+    .kbox:hover{{transform:translateY(-4px) scale(1.02);
+      box-shadow:0 14px 30px rgba(34,211,238,.20);border-color:{t['acc']} !important;}}
+    /* st.metric kutuları — hover'da yüksel + parla */
+    div[data-testid="stMetric"]{{transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}}
+    div[data-testid="stMetric"]:hover{{transform:translateY(-4px);
+      box-shadow:0 14px 30px rgba(34,211,238,.22);border-color:{t['acc']} !important;}}
+    /* Üst şerit kutuları (bütçe/kazanılan/kalan) hover */
+    .stripcard{{transition:transform .18s ease, box-shadow .18s ease;}}
+    .stripcard:hover{{transform:translateY(-3px);box-shadow:0 10px 26px rgba(34,211,238,.18);}}
+    /* Butonlar — daha belirgin hover (yüksel + parla + büyü) */
+    div[data-testid="stButton"] button, div[data-testid="stDownloadButton"] button,
+    div[data-testid="stFormSubmitButton"] button{{
+      transition:transform .15s ease, box-shadow .15s ease, filter .15s ease !important;}}
+    div[data-testid="stButton"] button:hover, div[data-testid="stDownloadButton"] button:hover,
+    div[data-testid="stFormSubmitButton"] button:hover{{
+      transform:translateY(-2px) scale(1.03) !important;
+      box-shadow:0 8px 22px rgba(34,211,238,.30) !important;
+      filter:brightness(1.12) !important;}}
+    div[data-testid="stButton"] button:active{{transform:translateY(0) scale(.98) !important;}}
+    /* Granülarite (Günlük/Haftalık/Aylık) + menü seçili parlaması */
+    section[data-testid="stSidebar"] [role="radiogroup"] label:hover{{
+      transform:translateX(3px);box-shadow:0 3px 12px rgba(34,211,238,.15);transition:all .15s ease;}}
+    section[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked){{
+      box-shadow:0 4px 16px {t['acc']}44;}}
+    /* Panel başlıkları hover'da vurgu */
+    .panel-ttl{{transition:color .15s ease;}}
     </style>""", unsafe_allow_html=True)
 
 
@@ -501,13 +542,13 @@ if page == "Komuta Paneli":
     _kalan_y = _oz_strip["kalan"]
     st.markdown(
         f'<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
-        f'<div style="flex:1;min-width:200px;background:rgba(56,189,248,.08);border:1px solid #123a44;'
+        f'<div class="stripcard" style="flex:1;min-width:200px;background:rgba(56,189,248,.08);border:1px solid #123a44;'
         f'border-radius:10px;padding:11px 16px"><span style="color:#38bdf8;font-size:10.5px;font-weight:700;letter-spacing:.5px">TOPLAM BÜTÇE</span>'
         f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(_bac_y)}</div></div>'
-        f'<div style="flex:1;min-width:200px;background:rgba(34,211,238,.08);border:1px solid #123a44;'
+        f'<div class="stripcard" style="flex:1;min-width:200px;background:rgba(34,211,238,.08);border:1px solid #123a44;'
         f'border-radius:10px;padding:11px 16px"><span style="color:#22d3ee;font-size:10.5px;font-weight:700;letter-spacing:.5px">KAZANILAN</span>'
         f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(_ev_y)}</div></div>'
-        f'<div style="flex:1;min-width:200px;background:rgba(251,113,133,.08);border:1px solid #402028;'
+        f'<div class="stripcard" style="flex:1;min-width:200px;background:rgba(251,113,133,.08);border:1px solid #402028;'
         f'border-radius:10px;padding:11px 16px"><span style="color:#fb7185;font-size:10.5px;font-weight:700;letter-spacing:.5px">KALAN İŞ</span>'
         f'<div style="color:#e6f4f4;font-size:20px;font-weight:800">{core.fmt_money(_kalan_y)}</div></div>'
         f'</div>', unsafe_allow_html=True)

@@ -104,15 +104,19 @@ def progress_donut(pct, plan_pct=None):
     col = C_OK if (plan_pct is None or pct >= plan_pct) else C_AMB
     fig = go.Figure(go.Pie(
         values=[pct, 100 - pct], hole=0.70, sort=False, direction="clockwise", rotation=0,
-        marker=dict(colors=[col, C_TRACK], line=dict(color="rgba(0,0,0,0)", width=0)),
-        textinfo="none", hoverinfo="skip"))
-    ann = [dict(text=f"<b>%{pct:.0f}</b>", x=0.5, y=0.54, font=dict(size=46, color=col, family=FONT), showarrow=False),
+        marker=dict(colors=[col, C_TRACK], line=dict(color="#0a121e", width=3)),
+        textinfo="none",
+        hovertemplate=["<b>Tamamlanan</b>: %%%.1f<extra></extra>" % pct,
+                       "<b>Kalan</b>: %%%.1f<extra></extra>" % (100 - pct)],
+        pull=[0.02, 0]))
+    ann = [dict(text=f"<b>%{pct:.0f}</b>", x=0.5, y=0.54, font=dict(size=48, color=col, family=FONT), showarrow=False),
            dict(text="FİZİKİ İLERLEME", x=0.5, y=0.37, font=dict(size=11, color="#8aa", family=FONT), showarrow=False)]
     if plan_pct is not None:
         ann.append(dict(text=f"Plan: %{plan_pct:.0f}", x=0.5, y=0.24,
                         font=dict(size=12, color=C_PLAN, family=FONT), showarrow=False))
     fig.update_layout(annotations=ann, height=300, margin=dict(l=6, r=6, t=10, b=6),
-                      showlegend=False, paper_bgcolor="rgba(0,0,0,0)", font=dict(family=FONT))
+                      showlegend=False, paper_bgcolor="rgba(0,0,0,0)", font=dict(family=FONT),
+                      hoverlabel=dict(bgcolor=C_HOVER, font=dict(color=C_INK, size=13, family=FONT)))
     return fig
 
 
