@@ -39,9 +39,10 @@ def _verify(plain: str, stored: str) -> bool:
 
 # Varsayılan hesaplar (yalnızca Secrets tanımlı DEĞİLKEN kullanılır).
 # YÖNETİCİ (düzenleme yetkili): admin / arakonak2025
-# MİSAFİR (yalnızca görüntüleme): misafir1 / nas2026 · misafir2 / nas2026 · misafir3 / nas2026
+# MİSAFİR (yalnızca görüntüleme): misafir / arakonak2026 · misafir1-2-3 / nas2026
 _DEFAULT_USERS = {
     "admin":    {"name": "Proje Müdürü",  "role": "admin",  "hash": hash_password("arakonak2025")},
+    "misafir":  {"name": "Misafir (Görüntüleyici)", "role": "viewer", "hash": hash_password("arakonak2026")},
     "misafir1": {"name": "Misafir 1",     "role": "viewer", "hash": hash_password("nas2026")},
     "misafir2": {"name": "Misafir 2",     "role": "viewer", "hash": hash_password("nas2026")},
     "misafir3": {"name": "Misafir 3",     "role": "viewer", "hash": hash_password("nas2026")},
@@ -149,7 +150,7 @@ def login_gate() -> bool:
         <div class="lg-title">ARAKONAK GES</div>
         <div class="lg-sub">Proje Kontrol Panosu · Güvenli Giriş</div>
         <div class="lg-chips">
-          <span class="lg-chip">\u26a1 88,14 MWp</span>
+          <span class="lg-chip">\u26a1 88,62 MWp</span>
           <span class="lg-chip">\U0001F4CD Muş</span>
           <span class="lg-chip">\U0001F512 Yetkili Erişim</span>
         </div>
