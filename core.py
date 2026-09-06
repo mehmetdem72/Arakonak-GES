@@ -719,3 +719,53 @@ def hakedis_pursantaj(df):
         "plan_pct": plan_hak * 100,
         "toplam_pursantaj": float(d["pursantaj"].sum()) * 100,
     }
+
+
+def stok_ges_progress(stok_df):
+    """Stok imalat ilerlemesini GES-1/GES-2/ORTAK olarak gösterir (tutar-ağırlıklı).
+    Stok poz'u (ARK.xxx) birim fiyat cetveliyle (PR.xxx) çekirdek eşlemesiyle GES'e bağlanır."""
+    import data_maliyet, re
+    if stok_df is None or stok_df.empty:
+        return pd.DataFrame(columns=["grp", "short", "realPct", "planPct", "budget"])
+
+    def core_poz(p):
+        p = str(p).upper().strip()
+        p = re.sub(r'^(PR|ARK)\.', '', p)
+        p = re.sub(r'[-.](TN|SM|SM2|N|D|M)$', '', p)
+        p = re.sub(r'-\d+', '', p)
+        return p
+    # birim fiyat: çekirdek → GES miktarları (g1,g2,ort) + birim fiyat
+    m = data_maliyet.maliyet_df()
+    ges_map = {}
+    for _, r in m.iterrows():
+        c = core_poz(r["poz"])
+        if c not in ges_map:
+            ges_map[c] = {"g1": 0, "g2": 0, "ort": 0, "bf": r["bf"]}
+        ges_map[c]["g1"] += r["g1"]; ges_map[c]["g2"] += r["g2"]; ges_map[c]["ort"] += r["ort"]
+
+    s = stok_df.copy()
+    for cc in ("miktar", "bf", "imalat"):
+        s[cc] = pd.to_numeric(s[cc], errors="coerce").fillna(0.0)
+    # her stok kalemi için: imalat oranı × GES tutarları
+    tut = {"GES-1": 0.0, "GES-2": 0.0, "ORTAK": 0.0}
+    ev = {"GES-1": 0.0, "GES-2": 0.0, "ORTAK": 0.0}
+    for _, r in s.iterrows():
+        c = core_poz(r["poz"])
+        g = ges_map.get(c)
+        if not g:
+            continue
+        mik_top = g["g1"] + g["g2"] + g["ort"]
+        if mik_top <= 0:
+            continue
+        imalat_oran = (r["imalat"] / r["miktar"]) if r["miktar"] > 0 else 0
+        for z, gk in [("GES-1", "g1"), ("GES-2", "g2"), ("ORTAK", "ort")]:
+            gtutar = g[gk] * r["bf"]
+            tut[z] += gtutar
+            ev[z] += gtutar * imalat_oran
+    rows = []
+    for z in ["GES-1", "GES-2", "ORTAK"]:
+        if tut[z] <= 0:
+            continue
+        rows.append({"grp": z, "short": z, "budget": tut[z],
+                     "realPct": ev[z] / tut[z] * 100, "planPct": 0.0})
+    return pd.DataFrame(rows)

@@ -284,9 +284,9 @@ def save_yuklenici(conn, df):
 
 # ── Stok & İmalat (Malzeme Mutabakatı) ──
 def load_stok(conn):
-    """Yüklenici kalemleri bazında stok. sorumluluk (İşveren/Yüklenici) + gelen/veren/imalat."""
-    import data_yuklenici, re
-    # İşveren sorumluluğundaki poz çekirdekleri (NAS_DIŞ_TEDARİK)
+    """Stok kalemleri (SADECE stoklanabilir malzemeler: temin/tedarik/sevk).
+    Birim fiyat cetvelinden kurulur. sorumluluk + gelen/veren/imalat."""
+    import data_maliyet, re
     _ISV_CORES = {"SLR.3600", "SLR.4400", "ELK.7222", "ELK.7422", "ELK.7512",
                   "ELK.7513", "ELK.7515", "ELK.7522", "ELK.7524", "ELK.7541"}
 
@@ -294,23 +294,39 @@ def load_stok(conn):
         p = str(p).upper(); p = re.sub(r'^(PR|ARK)\.', '', p)
         p = re.sub(r'[-.](TN|SM|TM|T|N|D|M)$', '', p); p = re.sub(r'-\d+', '', p)
         return p
+
+    def _stok_mu(ad):
+        a = str(ad).lower()
+        degil = ['montaj', 'stoklanması ve montaj', 'betonlama', 'çakma', 'hafriyat',
+                 'mobilizasyon', 'devreye alma', 'saha dışına taşınması', 'tesviye',
+                 'nakliye denetim', 'fabrika ve nakliye denetim', 'proje sahasında montaj',
+                 'yapılması', 'stabilize yol', 'yağ çukuru', 'altyapı imalat',
+                 'hibrit delme', 'delme betonlama']
+        stok = ['temin', 'tedarik', 'sevk edilmesi', 'sahaya sevk', 'fabrikadan sahaya sevk']
+        if any(k in a for k in degil):
+            return False
+        return any(k in a for k in stok)
     try:
         df = pd.read_sql("SELECT * FROM stok_imalat", conn)
         if len(df) == 0:
             raise ValueError("boş")
-        # eski kayıtta yeni sütunlar yoksa ekle
         if "sorumluluk" not in df.columns:
             df["sorumluluk"] = df["poz"].map(lambda p: "İşveren" if _core(p) in _ISV_CORES else "Yüklenici")
         if "veren" not in df.columns:
             df["veren"] = 0.0
         return df
     except Exception:
-        y = data_yuklenici.yuklenici_df()
-        df = y[["poz", "ad", "grup", "miktar", "birim", "bf", "tutar"]].copy()
+        m = data_maliyet.maliyet_df()
+        m = m[m["ad"].map(_stok_mu)].copy()          # sadece stoklanabilir kalemler
+        df = pd.DataFrame({
+            "poz": m["poz"], "ad": m["ad"], "grup": m["disc"],
+            "miktar": (m["g1"] + m["g2"] + m["ort"]), "birim": m["birim"],
+            "bf": m["bf"], "tutar": m["tutar"],
+        })
         df["sorumluluk"] = df["poz"].map(lambda p: "İşveren" if _core(p) in _ISV_CORES else "Yüklenici")
-        df["gelen"] = 0.0      # depoya gelen (işveren tedarik)
-        df["veren"] = 0.0      # yükleniciye verilen (işveren tedarik)
-        df["imalat"] = 0.0     # sahada imalata giren
+        df["gelen"] = 0.0
+        df["veren"] = 0.0
+        df["imalat"] = 0.0
         save_stok(conn, df)
         return df
 

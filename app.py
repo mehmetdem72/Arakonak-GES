@@ -248,47 +248,40 @@ def inject_css(theme="dark"):
     [data-testid="stMain"]::-webkit-scrollbar-thumb{{background:#3a5169;border-radius:7px;border:3px solid {t['rail']};}}
     html, body{{scrollbar-color:#3a5169 {t['rail']};}}
     @media (max-width:1250px){{.kpi-grid{{grid-template-columns:repeat(2,1fr);}}}}
-    /* ══ CANLI HOVER EFEKTLERİ — grafikler ve butonlar daha belirgin ══ */
-    /* Bordered container'lar (grafik kapları) — hover'da yüksel + parla */
-    div[data-testid="stVerticalBlockBorderWrapper"],
-    div[data-testid="stVerticalBlock"] > div[style*="border"],
-    .stElementContainer:has(.stPlotlyChart){{
-      transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;}}
+    /* ══ BELİRGİNLİK EFEKTLERİ — hareket YOK, sadece parlama/gölge ══ */
+    /* Grafik kapları — hover'da parla (yükselmez, kaymaz) */
+    div[data-testid="stVerticalBlockBorderWrapper"]{{
+      transition:box-shadow .2s ease, border-color .2s ease;}}
     div[data-testid="stVerticalBlockBorderWrapper"]:hover{{
-      transform:translateY(-4px);
-      box-shadow:0 16px 40px rgba(34,211,238,.18), 0 0 0 1px {t['acc']}55;
+      box-shadow:0 0 0 1px {t['acc']}66, 0 6px 24px rgba(34,211,238,.14);
       border-color:{t['acc']} !important;}}
-    /* Plotly grafik alanı hover'da hafif büyür + gölge */
-    .stPlotlyChart{{transition:transform .25s ease, filter .25s ease;border-radius:12px;}}
-    .stPlotlyChart:hover{{transform:scale(1.02);filter:drop-shadow(0 8px 22px rgba(34,211,238,.30));}}
-    /* KPI kutuları (kbox) — daha belirgin hover */
-    .kbox{{transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}}
-    .kbox:hover{{transform:translateY(-4px) scale(1.02);
-      box-shadow:0 14px 30px rgba(34,211,238,.20);border-color:{t['acc']} !important;}}
-    /* st.metric kutuları — hover'da yüksel + parla */
-    div[data-testid="stMetric"]{{transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}}
-    div[data-testid="stMetric"]:hover{{transform:translateY(-4px);
-      box-shadow:0 14px 30px rgba(34,211,238,.22);border-color:{t['acc']} !important;}}
-    /* Üst şerit kutuları (bütçe/kazanılan/kalan) hover */
-    .stripcard{{transition:transform .18s ease, box-shadow .18s ease;}}
-    .stripcard:hover{{transform:translateY(-3px);box-shadow:0 10px 26px rgba(34,211,238,.18);}}
-    /* Butonlar — daha belirgin hover (yüksel + parla + büyü) */
+    /* Plotly grafik — hover'da hafif parlama (büyümez) */
+    .stPlotlyChart{{transition:filter .2s ease;border-radius:12px;}}
+    .stPlotlyChart:hover{{filter:drop-shadow(0 3px 12px rgba(34,211,238,.22)) brightness(1.05);}}
+    /* KPI kutuları (kbox) — parlama, hareket yok */
+    .kbox{{transition:box-shadow .18s ease, border-color .18s ease;}}
+    .kbox:hover{{box-shadow:0 0 0 1px {t['acc']}55, 0 6px 20px rgba(34,211,238,.14);
+      border-color:{t['acc']} !important;}}
+    /* st.metric kutuları — parlama, hareket yok */
+    div[data-testid="stMetric"]{{transition:box-shadow .18s ease, border-color .18s ease;}}
+    div[data-testid="stMetric"]:hover{{box-shadow:0 0 0 1px {t['acc']}55, 0 6px 20px rgba(34,211,238,.16);
+      border-color:{t['acc']} !important;}}
+    /* Üst şerit kutuları — parlama, hareket yok */
+    .stripcard{{transition:box-shadow .18s ease, border-color .18s ease;}}
+    .stripcard:hover{{box-shadow:0 0 0 1px {t['acc']}55, 0 5px 18px rgba(34,211,238,.14);}}
+    /* Butonlar — sadece parla ve aydınlan (zıplamaz, büyümez) */
     div[data-testid="stButton"] button, div[data-testid="stDownloadButton"] button,
     div[data-testid="stFormSubmitButton"] button{{
-      transition:transform .15s ease, box-shadow .15s ease, filter .15s ease !important;}}
+      transition:box-shadow .15s ease, filter .15s ease, border-color .15s ease !important;}}
     div[data-testid="stButton"] button:hover, div[data-testid="stDownloadButton"] button:hover,
     div[data-testid="stFormSubmitButton"] button:hover{{
-      transform:translateY(-2px) scale(1.03) !important;
-      box-shadow:0 8px 22px rgba(34,211,238,.30) !important;
-      filter:brightness(1.12) !important;}}
-    div[data-testid="stButton"] button:active{{transform:translateY(0) scale(.98) !important;}}
-    /* Granülarite (Günlük/Haftalık/Aylık) + menü seçili parlaması */
+      box-shadow:0 0 0 1px {t['acc']}, 0 4px 16px rgba(34,211,238,.25) !important;
+      filter:brightness(1.10) !important;border-color:{t['acc']} !important;}}
+    /* Menü — hover'da parla (kaymaz) */
     section[data-testid="stSidebar"] [role="radiogroup"] label:hover{{
-      transform:translateX(3px);box-shadow:0 3px 12px rgba(34,211,238,.15);transition:all .15s ease;}}
+      box-shadow:0 2px 10px rgba(34,211,238,.14);transition:box-shadow .15s ease;}}
     section[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked){{
-      box-shadow:0 4px 16px {t['acc']}44;}}
-    /* Panel başlıkları hover'da vurgu */
-    .panel-ttl{{transition:color .15s ease;}}
+      box-shadow:0 3px 14px {t['acc']}44;}}
     </style>""", unsafe_allow_html=True)
 
 
@@ -815,11 +808,12 @@ elif page == "Stok Durumu":
     se = core.stok_enrich(stok)
     oz = core.stok_ozet(stok)
 
-    # Üstte GES-1/GES-2/ORTAK genel grafik (ana ilerlemeden)
+    # Üstte GES-1/GES-2/ORTAK — STOK imalatından beslenir
     with st.container(border=True):
-        st.markdown('<div class="panel-ttl">GES-1 / GES-2 / ORTAK İlerleme</div>', unsafe_allow_html=True)
-        _ges = core.maliyet_ges_progress(base)
+        st.markdown('<div class="panel-ttl">GES-1 / GES-2 / ORTAK — Sahada İmalat Durumu</div>', unsafe_allow_html=True)
+        _ges = core.stok_ges_progress(stok)
         st.plotly_chart(charts.group_gauges(_ges), width="stretch", config=PLOT, key="ges_stok")
+        st.caption("Stok kalemlerinde sahada imal edilen oranın GES bazında dağılımı.")
 
     c = st.columns(4)
     c[0].metric("İşveren Teslim Değeri", core.fmt_money(oz["gelen_deger"]),

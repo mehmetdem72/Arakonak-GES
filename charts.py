@@ -107,8 +107,7 @@ def progress_donut(pct, plan_pct=None):
         marker=dict(colors=[col, C_TRACK], line=dict(color="#0a121e", width=3)),
         textinfo="none",
         hovertemplate=["<b>Tamamlanan</b>: %%%.1f<extra></extra>" % pct,
-                       "<b>Kalan</b>: %%%.1f<extra></extra>" % (100 - pct)],
-        pull=[0.02, 0]))
+                       "<b>Kalan</b>: %%%.1f<extra></extra>" % (100 - pct)]))
     ann = [dict(text=f"<b>%{pct:.0f}</b>", x=0.5, y=0.54, font=dict(size=48, color=col, family=FONT), showarrow=False),
            dict(text="FİZİKİ İLERLEME", x=0.5, y=0.37, font=dict(size=11, color="#8aa", family=FONT), showarrow=False)]
     if plan_pct is not None:
