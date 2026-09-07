@@ -299,7 +299,30 @@ ADMIN = auth.is_admin()
 def _conn():
     c = storage.get_conn()
     storage.init_db(c)
+    # Supabase yedeği varsa ve yerel DB henüz veri girilmemişse geri yükle
+    try:
+        import supabase_backup
+        if supabase_backup.is_enabled():
+            snap = supabase_backup.pull()
+            if snap:
+                # yerel veride hiç ilerleme yoksa (taze başlangıç) Supabase'den çek
+                cur_df = storage.load_progress(c)
+                has_progress = float(pd.to_numeric(cur_df.get("real", 0), errors="coerce").fillna(0).sum()) > 0
+                if not has_progress:
+                    storage.import_all(c, snap)
+    except Exception:
+        pass
     return c
+
+
+def _backup_to_cloud():
+    """Tüm veriyi Supabase'e yedekle (varsa). Sessizce çalışır."""
+    try:
+        import supabase_backup
+        if supabase_backup.is_enabled():
+            supabase_backup.push(storage.export_all(conn))
+    except Exception:
+        pass
 
 
 conn = _conn()
@@ -311,10 +334,19 @@ if "hse" not in st.session_state:
     st.session_state.hse = storage.load_hse(conn)
 
 
+def _ad_html(ad, limit=95):
+    """Kalem adını kesip, tam adı tooltip (title) olarak ekler. HTML-güvenli."""
+    ad = str(ad)
+    safe = ad.replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+    goster = safe if len(ad) <= limit else safe[:limit - 1] + "…"
+    return f'<span title="{safe}">{goster}</span>'
+
+
 def persist_progress():
     storage.save_progress(conn, st.session_state.df)
     # her kayıtta bugünün günlük anlık görüntüsünü güncelle (tüm kapsamlar)
     storage.record_daily(conn, core.per_scope_kpis(core.enrich(st.session_state.df)))
+    _backup_to_cloud()   # Supabase'e otomatik yedek
 
 
 def set_progress(ids, plan=None, real=None, ac=None):
@@ -450,7 +482,7 @@ def items_table_html(view: pd.DataFrame, limit: int = 400):
         rl = r["real"]; col = TEAL if rl >= r["plan"] else RED
         w = max(0, min(100, rl))
         dcol = {"TAMAMLANDI": TEAL, "DEVAM": "#38bdf8", "GERİDE": RED, "BAŞLAMADI": "#5f7a99"}.get(r["durum"], "#5f7a99")
-        rows += (f'<tr><td class="mx-name" style="max-width:340px">{r["name"][:70]}</td>'
+        rows += (f'<tr><td class="mx-name" style="max-width:360px">{_ad_html(r["name"])}</td>'
                  f'<td style="color:#5f7a99;font-size:10px">{r["disc"][:16]}</td>'
                  f'<td style="text-align:right;color:#9fc3e0;font-size:10.5px">{r["qty"]:,.0f}</td>'
                  f'<td style="color:#7fb0b3;font-size:10px">{r["unit"]}</td>'
@@ -639,7 +671,7 @@ elif page == "İş Programına Göre İlerleme":
                         st.toast("Yeni iş kalemi eklendi."); st.rerun()
         with dcol:
             with st.popover("🗑 İş Kalemi Sil", use_container_width=True):
-                del_map = {f'{r["disc"]} — {r["name"][:50]}': r["id"] for _, r in scoped.iterrows()}
+                del_map = {f'{r["disc"]} — {r["name"][:90]}': r["id"] for _, r in scoped.iterrows()}
                 del_sel = st.multiselect("Silinecek kalem(ler)", list(del_map.keys()))
                 if st.button("Seçilenleri sil", disabled=not del_sel, width="stretch"):
                     delete_items([del_map[x] for x in del_sel])
@@ -670,7 +702,7 @@ elif page == "İş Programına Göre İlerleme":
             st.session_state.setdefault(f"ep_{rid}", int(round(r["plan"])))
             st.session_state.setdefault(f"er_{rid}", int(round(r["real"])))
             c = st.columns([2.8, 1.0, 0.9, 1.2, 1.0, 1.0, 0.8])
-            c[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{r["name"][:48]}</div>', unsafe_allow_html=True)
+            c[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{_ad_html(r["name"], 60)}</div>', unsafe_allow_html=True)
             c[1].markdown(f'<div style="font-size:11px;padding-top:8px;color:#9fc3e0;text-align:right">{r["qty"]:,.0f} {r["unit"]}</div>', unsafe_allow_html=True)
             c[2].markdown(f'<div style="font-size:11px;padding-top:8px;font-weight:700;color:{_gcol.get(r["grp"], "#7fb0b3")}">{str(r["grp"])[:10]}</div>', unsafe_allow_html=True)
             c[3].markdown(f'<div style="font-size:11px;padding-top:8px;color:#c7e8e4;text-align:right">{core.fmt_money(r["tutar"])}</div>', unsafe_allow_html=True)
@@ -768,7 +800,7 @@ elif page == "Hakedişe Esas İmalat":
             real = st.session_state.get(f"hr_{rid}", r["real"])
             hak_purs = purs * real / 100
             cc = st.columns([2.8, 1.1, 0.9, 1.1, 1.1, 0.8])
-            cc[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{str(ad)[:50]}</div>', unsafe_allow_html=True)
+            cc[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{_ad_html(ad, 60)}</div>', unsafe_allow_html=True)
             cc[1].markdown(f'<div style="font-size:11px;padding-top:8px;color:#a78bfa;text-align:right">%{purs:.3f}</div>', unsafe_allow_html=True)
             cc[2].number_input("r", 0, 100, key=f"hr_{rid}", label_visibility="collapsed")
             cc[3].markdown(f'<div style="font-size:11px;padding-top:8px;color:#34d399;text-align:right">%{hak_purs:.3f}</div>', unsafe_allow_html=True)
@@ -786,7 +818,7 @@ elif page == "Hakedişe Esas İmalat":
             pid = r["id"]; ad = _admap.get(pid, pid)
             purs = r["pursantaj"] * 100; real = r["real"]; hak_purs = purs * real / 100
             rows += ('<tr><td style="color:#5f7a99;font-size:10px">' + str(pid) + '</td>'
-                     '<td class="mx-name" style="font-size:11px;max-width:320px">' + str(ad)[:60] + '</td>'
+                     '<td class="mx-name" style="font-size:11px;max-width:340px">' + _ad_html(ad) + '</td>'
                      '<td style="text-align:right;color:#a78bfa;font-size:10.5px">%' + ("%.3f" % purs) + '</td>'
                      '<td style="text-align:center;color:#22d3ee;font-size:10.5px">%' + ("%.0f" % real) + '</td>'
                      '<td style="text-align:right;color:#34d399;font-size:10.5px">%' + ("%.3f" % hak_purs) + '</td>'
@@ -861,7 +893,7 @@ elif page == "Stok Durumu":
             veren = st.session_state.get(f"sv_{poz}", r["veren"])
             imalat = st.session_state.get(f"si_{poz}", r["imalat"])
             cc = st.columns([2.4, 0.8, 0.9, 1.15, 1.15, 1.15, 1.15, 0.7])
-            cc[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{r["ad"][:42]}</div>', unsafe_allow_html=True)
+            cc[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{_ad_html(r["ad"], 55)}</div>', unsafe_allow_html=True)
             _scol = "#fbbf24" if is_isv else "#22d3ee"
             cc[1].markdown(f'<div style="font-size:10px;padding-top:9px;font-weight:700;color:{_scol}">{"İşv" if is_isv else "Yük"}</div>', unsafe_allow_html=True)
             cc[2].markdown(f'<div style="font-size:11px;padding-top:8px;color:#9fc3e0;text-align:right">{r["miktar"]:,.0f}</div>', unsafe_allow_html=True)
@@ -891,6 +923,7 @@ elif page == "Stok Durumu":
                     g = 0.0; v = 0.0
                 m.loc[poz, ["gelen", "veren", "imalat"]] = [g, v, i]
                 storage.save_stok(conn, m.reset_index())
+                _backup_to_cloud()
                 st.toast(f"✅ Kaydedildi: {r['ad'][:30]}")
                 st.rerun()
     else:
@@ -904,7 +937,7 @@ elif page == "Stok Durumu":
             veren_c = f'{r["veren"]:,.0f}' if is_isv else "—"
             depo_yuk = f'{r["depoda_kalan"]:,.0f} / {r["yuklenicide"]:,.0f}' if is_isv else "—"
             rows += (f'<tr><td style="color:#5f7a99;font-size:10px">{r["poz"]}</td>'
-                     f'<td class="mx-name" style="font-size:11px;max-width:230px">{r["ad"][:44]}</td>'
+                     f'<td class="mx-name" style="font-size:11px;max-width:280px">{_ad_html(r["ad"])}</td>'
                      f'<td style="text-align:center;color:{scol};font-size:9.5px;font-weight:700">{"İşveren" if is_isv else "Yüklenici"}</td>'
                      f'<td style="text-align:right;color:#9fc3e0;font-size:10.5px">{r["miktar"]:,.0f} {r["birim"]}</td>'
                      f'<td style="text-align:right;color:#38bdf8;font-size:10.5px">{gelen_c}</td>'
@@ -945,8 +978,19 @@ elif page == "Rapor & Yedek":
 
     st.divider()
     st.markdown('<div class="panel-ttl">💾 Yedek & Geri Yükleme</div>', unsafe_allow_html=True)
-    st.warning("💡 Verileriniz sunucuda geçici tutulur. **Düzenli olarak Tam Yedek dosyasını indirin** "
-               "(ör. her hafta) — böylece bir sorun olursa geri yükleyebilirsiniz.")
+    try:
+        import supabase_backup
+        _sb_on = supabase_backup.is_enabled()
+    except Exception:
+        _sb_on = False
+    if _sb_on:
+        _lu = supabase_backup.last_updated() or "—"
+        st.success(f"☁️ **Supabase kalıcı yedek AKTİF.** Her veri değişikliği otomatik buluta yedekleniyor — "
+                   f"uygulama yeniden başlasa bile verileriniz korunur. Son yedek: {_lu[:19]}")
+    else:
+        st.warning("💡 Verileriniz sunucuda geçici tutulur. **Düzenli olarak Tam Yedek dosyasını indirin** "
+                   "(ör. her hafta) — böylece bir sorun olursa geri yükleyebilirsiniz. "
+                   "(Supabase kalıcı yedek için Ayarlar'daki secrets'a db_url ekleyin.)")
     b1, b2 = st.columns(2)
     with b1:
         full = json.dumps(storage.export_all(conn), ensure_ascii=False, indent=1).encode("utf-8")
