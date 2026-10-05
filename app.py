@@ -386,7 +386,7 @@ meta = {
 
 # ────────────────────── SOL RAY ──────────────────────
 PAGES = ["Komuta Paneli", "İş Programına Göre İlerleme", "Hakedişe Esas İmalat",
-         "Stok Durumu", "Rapor & Yedek", "Ayarlar"]
+         "Hakediş Tablo", "Stok Durumu", "Rapor & Yedek", "Ayarlar"]
 ICON = {"Komuta Paneli": "▦", "İş Programına Göre İlerleme": "📅", "Hakedişe Esas İmalat": "🏗",
         "Stok Durumu": "📦", "Rapor & Yedek": "⭳", "Ayarlar": "⚙"}
 with st.sidebar:
@@ -792,20 +792,22 @@ elif page == "Hakedişe Esas İmalat":
     if edit_mode:
         for _, r in sl.iterrows():
             st.session_state.setdefault(f"hr_{r['id']}", int(round(r["real"])))
-        h = st.columns([2.8, 1.1, 0.9, 1.1, 1.1, 0.8])
-        h[0].markdown("**Kalem**"); h[1].markdown("**Pursantaj**"); h[2].markdown("**Gerçek %**")
-        h[3].markdown("**Hak Edilen %**"); h[4].markdown("**Tutar**"); h[5].markdown("**Kaydet**")
+        h = st.columns([2.4, 1.0, 1.2, 0.8, 1.0, 1.1, 0.7])
+        h[0].markdown("**Kalem**"); h[1].markdown("**Pursantaj**"); h[2].markdown("**İhale Purs.$**")
+        h[3].markdown("**Gerçek %**"); h[4].markdown("**Hak Edilen %**"); h[5].markdown("**Tutar**"); h[6].markdown("**💾**")
         for _, r in sl.iterrows():
             rid = r["id"]; ad = _admap.get(rid, rid); purs = r["pursantaj"] * 100
             real = st.session_state.get(f"hr_{rid}", r["real"])
             hak_purs = purs * real / 100
-            cc = st.columns([2.8, 1.1, 0.9, 1.1, 1.1, 0.8])
-            cc[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{_ad_html(ad, 60)}</div>', unsafe_allow_html=True)
+            ihale_tutar = core.IHALE_BEDELI * r["pursantaj"]
+            cc = st.columns([2.4, 1.0, 1.2, 0.8, 1.0, 1.1, 0.7])
+            cc[0].markdown(f'<div style="font-size:11px;padding-top:8px;color:#dbeafe">{_ad_html(ad, 48)}</div>', unsafe_allow_html=True)
             cc[1].markdown(f'<div style="font-size:11px;padding-top:8px;color:#a78bfa;text-align:right">%{purs:.3f}</div>', unsafe_allow_html=True)
-            cc[2].number_input("r", 0, 100, key=f"hr_{rid}", label_visibility="collapsed")
-            cc[3].markdown(f'<div style="font-size:11px;padding-top:8px;color:#34d399;text-align:right">%{hak_purs:.3f}</div>', unsafe_allow_html=True)
-            cc[4].markdown(f'<div style="font-size:11px;padding-top:8px;color:#c7e8e4;text-align:right">{core.fmt_money(r["tutar"])}</div>', unsafe_allow_html=True)
-            if cc[5].button("💾", key=f"hksave_{rid}", help="Bu kalemi kaydet"):
+            cc[2].markdown(f'<div style="font-size:11px;padding-top:8px;color:#fbbf24;text-align:right">{core.fmt_money(ihale_tutar)}</div>', unsafe_allow_html=True)
+            cc[3].number_input("r", 0, 100, key=f"hr_{rid}", label_visibility="collapsed")
+            cc[4].markdown(f'<div style="font-size:11px;padding-top:8px;color:#34d399;text-align:right">%{hak_purs:.3f}</div>', unsafe_allow_html=True)
+            cc[5].markdown(f'<div style="font-size:11px;padding-top:8px;color:#c7e8e4;text-align:right">{core.fmt_money(r["tutar"])}</div>', unsafe_allow_html=True)
+            if cc[6].button("💾", key=f"hksave_{rid}", help="Bu kalemi kaydet"):
                 rl = max(0.0, min(100.0, float(st.session_state.get(f"hr_{rid}", 0))))
                 st.session_state.df.loc[st.session_state.df["id"] == rid, "real"] = rl
                 persist_progress()
@@ -817,15 +819,139 @@ elif page == "Hakedişe Esas İmalat":
         for _, r in sl.iterrows():
             pid = r["id"]; ad = _admap.get(pid, pid)
             purs = r["pursantaj"] * 100; real = r["real"]; hak_purs = purs * real / 100
+            ihale_tutar = core.IHALE_BEDELI * r["pursantaj"]
             rows += ('<tr><td style="color:#5f7a99;font-size:10px">' + str(pid) + '</td>'
-                     '<td class="mx-name" style="font-size:11px;max-width:340px">' + _ad_html(ad) + '</td>'
+                     '<td class="mx-name" style="font-size:11px;max-width:300px">' + _ad_html(ad) + '</td>'
                      '<td style="text-align:right;color:#a78bfa;font-size:10.5px">%' + ("%.3f" % purs) + '</td>'
+                     '<td style="text-align:right;color:#fbbf24;font-size:10.5px">' + core.fmt_money(ihale_tutar) + '</td>'
                      '<td style="text-align:center;color:#22d3ee;font-size:10.5px">%' + ("%.0f" % real) + '</td>'
                      '<td style="text-align:right;color:#34d399;font-size:10.5px">%' + ("%.3f" % hak_purs) + '</td>'
                      '<td style="text-align:right;color:#c7e8e4;font-size:10.5px">' + core.fmt_money(r["tutar"]) + '</td></tr>')
         st.markdown('<table class="mx"><tr><th>POZ</th><th>KALEM</th><th style="text-align:right">PURSANTAJ</th>'
+                    '<th style="text-align:right">İHALE PURS. TUTARI</th>'
                     '<th>GERÇEK %</th><th style="text-align:right">HAK EDİLEN %</th>'
                     '<th style="text-align:right">TUTAR</th></tr>' + rows + '</table>', unsafe_allow_html=True)
+
+
+elif page == "Hakediş Tablo":
+    st.markdown('<div style="background:linear-gradient(90deg,rgba(52,211,153,.10),rgba(34,211,238,.05));'
+                'border:1px solid #12324a;border-radius:12px;padding:11px 16px;font-size:12.5px;'
+                'color:#cfe3f7;margin-bottom:14px">📑 <b>Hakediş Tablo:</b> '
+                'Dönemsel hakediş. Her kaleme güncel toplam ilerleme % girilir; dönem ilerlemesi = '
+                'bu dönem − önceki dönem. Hakediş tutarı = ihale pursantaj tutarı × ilerleme. '
+                'Kesintiler önceki hakediş düşülerek otomatik hesaplanır.</div>',
+                unsafe_allow_html=True)
+
+    _ht_rows = core.hakedis_tablo_rows(base)
+    _onceki = storage.son_hakedis_donem(conn)
+    _donemler = storage.load_hakedis_donemler(conn)
+    _mevcut_donem_no = (int(_donemler["donem_no"].max()) + 1) if len(_donemler) > 0 else 1
+
+    # Üst: dönem bilgisi + hakediş ekle
+    tc = st.columns([1.3, 1.3, 1.3, 1])
+    _hesap = core.hakedis_hesapla(_ht_rows, _onceki)
+    _oz = core.hakedis_ozet_tablo(_hesap)
+    tc[0].metric("İhale Bedeli", core.fmt_money(core.IHALE_BEDELI))
+    tc[1].metric("Toplam Hakediş", core.fmt_money(_oz["toplam_hakedis"]),
+                 delta=f"%{_oz['toplam_ilerleme_pct']:.2f}", delta_color="off")
+    tc[2].metric("Bu Dönem Hakediş", core.fmt_money(_oz["donem_hakedis"]),
+                 help="Bu dönem yeni hak edilen (önceki düşülmüş)")
+    tc[3].metric("Kayıtlı Dönem", f"{len(_donemler)} adet")
+
+    # Hakediş Ekle butonu
+    if ADMIN:
+        hc1, hc2 = st.columns([1, 3])
+        with hc1:
+            with st.popover(f"➕ Hakediş Ekle (No {_mevcut_donem_no})", use_container_width=True):
+                st.markdown(f"**Hakediş No {_mevcut_donem_no}** olarak kaydedilecek.")
+                _htarih = st.date_input("Hakediş tarihi", value=datetime.now(), key="ht_tarih")
+                st.caption(f"Bu dönem hakedişi: {core.fmt_money(_oz['donem_hakedis'])} · "
+                           f"Güncel ilerlemeler İş Programı'ndan alınır.")
+                if st.button("✅ Hakedişi Kaydet", key="ht_kaydet", type="primary"):
+                    _snap = {r["poz"]: r["toplam_ilerleme"] for r in _hesap}
+                    storage.add_hakedis_donem(conn, _mevcut_donem_no, str(_htarih), _snap)
+                    _backup_to_cloud()
+                    st.toast(f"✅ Hakediş No {_mevcut_donem_no} kaydedildi")
+                    st.rerun()
+        with hc2:
+            if len(_donemler) > 0:
+                _sil_opts = [f"Hakediş No {int(r['donem_no'])} ({r['tarih'][:10]})" for _, r in _donemler.iterrows()]
+                with st.popover("🗑 Hakediş Sil", use_container_width=False):
+                    _sec = st.selectbox("Silinecek hakediş", _sil_opts, key="ht_sil_sec")
+                    if st.button("Sil", key="ht_sil_btn"):
+                        _no = int(_sec.split("No ")[1].split(" ")[0])
+                        storage.delete_hakedis_donem(conn, _no)
+                        _backup_to_cloud()
+                        st.toast(f"Hakediş No {_no} silindi"); st.rerun()
+
+    # Kayıtlı dönemler listesi
+    if len(_donemler) > 0:
+        with st.expander(f"📋 Kayıtlı Hakediş Dönemleri ({len(_donemler)})"):
+            for _, dr in _donemler.iterrows():
+                import json as _json
+                _dsnap = _json.loads(dr["data"])
+                _dtut = sum(core.IHALE_BEDELI * (_r["pursantaj"]) * (_dsnap.get(_r["poz"], 0) / 100) for _r in _ht_rows)
+                st.markdown(f"**Hakediş No {int(dr['donem_no'])}** · {dr['tarih'][:10]} · "
+                            f"Kümülatif tutar: {core.fmt_money(_dtut)}")
+
+    # Filtre + tablo görünümü
+    f1, f2 = st.columns([1.5, 1.5])
+    disc_opts = sorted(set(r["disc"] for r in _ht_rows if r["disc"]))
+    disc_view = f1.selectbox("Disiplin", ["(Tümü)"] + disc_opts, key="ht_disc")
+    ara = f2.text_input("Poz adında ara", key="ht_ara", placeholder="ör. panel, kablo...")
+    view = _hesap
+    if disc_view != "(Tümü)":
+        view = [r for r in view if r["disc"] == disc_view]
+    if ara:
+        view = [r for r in view if ara.lower() in str(r["ad"]).lower()]
+    view = sorted(view, key=lambda r: -r["ihale_tutar"])
+
+    st.caption(f"Görüntülenen: {len(view)} kalem".replace("$", "\\$"))
+
+    # Tablo (Excel formatında, okunur)
+    rows_html = ""
+    for r in view[:400]:
+        rows_html += (
+            '<tr>'
+            f'<td style="color:#5f7a99;font-size:10px">{r["poz"]}</td>'
+            f'<td class="mx-name" style="font-size:11px;max-width:240px">{_ad_html(r["ad"], 70)}</td>'
+            f'<td style="text-align:center;color:#7fb0b3;font-size:10px">{r["birim"]}</td>'
+            f'<td style="text-align:right;color:#a78bfa;font-size:10.5px">%{r["pursantaj"]*100:.3f}</td>'
+            f'<td style="text-align:right;color:#fbbf24;font-size:10.5px">{core.fmt_money(r["ihale_tutar"])}</td>'
+            f'<td style="text-align:center;color:#22d3ee;font-size:10.5px">%{r["toplam_ilerleme"]:.0f}</td>'
+            f'<td style="text-align:center;color:#38bdf8;font-size:10.5px">%{r["donem_ilerleme"]:.1f}</td>'
+            f'<td style="text-align:right;color:#34d399;font-size:10.5px">{core.fmt_money(r["donem_hakedis"])}</td>'
+            f'<td style="text-align:right;color:#9fc3e0;font-size:10.5px">{core.fmt_money(r["onceki_hakedis"])}</td>'
+            f'<td style="text-align:right;color:#c7e8e4;font-size:10.5px;font-weight:700">{core.fmt_money(r["toplam_hakedis"])}</td>'
+            '</tr>')
+    st.markdown(
+        '<table class="mx"><tr>'
+        '<th>POZ NO</th><th>POZUN ADI</th><th style="text-align:center">BİRİM</th>'
+        '<th style="text-align:right">PURSANTAJ</th><th style="text-align:right">İHALE PURS. TUTARI</th>'
+        '<th style="text-align:center">TOPLAM İLERLEME</th><th style="text-align:center">DÖNEM İLERLEME</th>'
+        '<th style="text-align:right">DÖNEM HAKEDİŞ</th><th style="text-align:right">ÖNCEKİ HAKEDİŞ</th>'
+        '<th style="text-align:right">TOPLAM HAKEDİŞ</th>'
+        '</tr>' + rows_html + '</table>', unsafe_allow_html=True)
+
+    # Excel + PDF çıktı
+    st.markdown("---")
+    st.markdown('<div class="panel-ttl">📤 Hakediş Tablosu Çıktı</div>', unsafe_allow_html=True)
+    ec1, ec2 = st.columns(2)
+    with ec1:
+        _xlsx = exports.hakedis_tablo_excel(_hesap, _oz, _mevcut_donem_no - 1 if len(_donemler) > 0 else 0)
+        st.download_button("⬇️ Excel (.xlsx) indir", _xlsx,
+                           file_name=f"ARAKONAK_Hakedis_Tablo.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           use_container_width=True)
+    with ec2:
+        try:
+            _pdf = exports.hakedis_tablo_pdf(_hesap, _oz, len(_donemler))
+            st.download_button("⬇️ PDF indir", _pdf,
+                               file_name=f"ARAKONAK_Hakedis_Tablo.pdf",
+                               mime="application/pdf", use_container_width=True)
+        except Exception as e:
+            st.button("⬇️ PDF indir", disabled=True, use_container_width=True,
+                      help="PDF oluşturulamadı (canlıda çalışır)")
 
 
 elif page == "Stok Durumu":

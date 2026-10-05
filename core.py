@@ -769,3 +769,65 @@ def stok_ges_progress(stok_df):
         rows.append({"grp": z, "short": z, "budget": tut[z],
                      "realPct": ev[z] / tut[z] * 100, "planPct": 0.0})
     return pd.DataFrame(rows)
+
+
+# ══════════════ HAKEDİŞ TABLOSU (dönemsel hakediş) ══════════════
+IHALE_BEDELI = 10250000.0
+
+
+def hakedis_tablo_rows(df):
+    """Hakediş Tablo sayfası için kalem bazında satırlar.
+    İhale pursantaj tutarı = ihale bedeli × pursantaj."""
+    d = _maliyet_join(df)
+    import data_maliyet
+    admap = {r["poz"]: (r["ad"], r["birim"], r["disc"]) for r in data_maliyet.MALIYET}
+    rows = []
+    for _, r in d.iterrows():
+        pid = r["id"]
+        ad, birim, disc = admap.get(pid, (pid, "", ""))
+        purs = float(r["pursantaj"])
+        rows.append({
+            "poz": pid, "ad": ad, "birim": birim, "disc": disc,
+            "pursantaj": purs,
+            "ihale_tutar": IHALE_BEDELI * purs,
+            "real": float(r["real"]),
+        })
+    return rows
+
+
+def hakedis_hesapla(tablo_rows, onceki_toplam_ilerleme=None):
+    """Dönemsel hakediş hesabı.
+    tablo_rows: hakedis_tablo_rows çıktısı (güncel toplam ilerleme = real)
+    onceki_toplam_ilerleme: {poz: önceki dönem toplam ilerleme %} (yoksa 0)
+    Döner: her kalem için dönem ilerleme, dönem hakediş, önceki, toplam."""
+    onceki = onceki_toplam_ilerleme or {}
+    out = []
+    for r in tablo_rows:
+        poz = r["poz"]
+        toplam_ilerleme = r["real"]                     # güncel toplam ilerleme %
+        onceki_ilerleme = float(onceki.get(poz, 0))     # önceki dönem toplam %
+        donem_ilerleme = max(0.0, toplam_ilerleme - onceki_ilerleme)
+        ihale = r["ihale_tutar"]
+        toplam_hakedis = ihale * toplam_ilerleme / 100
+        onceki_hakedis = ihale * onceki_ilerleme / 100
+        donem_hakedis = toplam_hakedis - onceki_hakedis
+        out.append({
+            **r,
+            "toplam_ilerleme": toplam_ilerleme,
+            "donem_ilerleme": donem_ilerleme,
+            "donem_hakedis": donem_hakedis,
+            "onceki_hakedis": onceki_hakedis,
+            "toplam_hakedis": toplam_hakedis,
+        })
+    return out
+
+
+def hakedis_ozet_tablo(hesap_rows):
+    """Hakediş tablosu toplamları."""
+    return {
+        "ihale_toplam": sum(r["ihale_tutar"] for r in hesap_rows),
+        "donem_hakedis": sum(r["donem_hakedis"] for r in hesap_rows),
+        "onceki_hakedis": sum(r["onceki_hakedis"] for r in hesap_rows),
+        "toplam_hakedis": sum(r["toplam_hakedis"] for r in hesap_rows),
+        "toplam_ilerleme_pct": (sum(r["toplam_hakedis"] for r in hesap_rows) / IHALE_BEDELI * 100) if IHALE_BEDELI else 0,
+    }

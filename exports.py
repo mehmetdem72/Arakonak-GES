@@ -439,3 +439,105 @@ def build_pdf(state: dict) -> bytes:
 
     doc.build(elems, onFirstPage=footer, onLaterPages=footer)
     return buf.getvalue()
+
+
+# ══════════════ HAKEDİŞ TABLOSU ÇIKTILARI ══════════════
+def hakedis_tablo_excel(hesap_rows, ozet, donem_no=0):
+    """Hakediş tablosunu Excel olarak üretir (bytes)."""
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    wb = Workbook(); ws = wb.active; ws.title = "Hakediş Tablo"
+    ws.merge_cells('A1:J1')
+    ws['A1'] = "ARAKONAK GES-1 ve GES-2 — HAKEDİŞ TABLOSU"
+    ws['A1'].font = Font(bold=True, size=13, color="0F2942"); ws['A1'].alignment = Alignment(horizontal="center")
+    ws.merge_cells('A2:J2')
+    ws['A2'] = f"İhale Bedeli: ${ozet['ihale_toplam']:,.2f}  ·  Hakediş No: {donem_no}  ·  Toplam Hakediş: ${ozet['toplam_hakedis']:,.2f}"
+    ws['A2'].font = Font(size=10, color="0369A1"); ws['A2'].alignment = Alignment(horizontal="center")
+
+    hdr = ["POZ NO", "POZUN ADI", "BİRİM", "PURSANTAJ", "İHALE PURS. TUTARI ($)",
+           "TOPLAM İLERLEME (%)", "DÖNEM İLERLEME (%)", "DÖNEM HAKEDİŞ ($)",
+           "ÖNCEKİ HAKEDİŞ ($)", "TOPLAM HAKEDİŞ ($)"]
+    ws.append([]); ws.append(hdr)
+    navy = PatternFill("solid", fgColor="0F2942"); white = Font(color="FFFFFF", bold=True, size=9)
+    thin = Side(style="thin", color="B0B8C4"); border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    hr = ws.max_row
+    for c in ws[hr]:
+        c.fill = navy; c.font = white; c.alignment = Alignment(horizontal="center", wrap_text=True); c.border = border
+    alt = PatternFill("solid", fgColor="F1F5F9")
+    for i, r in enumerate(hesap_rows):
+        ws.append([r["poz"], r["ad"], r["birim"], r["pursantaj"], r["ihale_tutar"],
+                   r["toplam_ilerleme"], r["donem_ilerleme"], r["donem_hakedis"],
+                   r["onceki_hakedis"], r["toplam_hakedis"]])
+        rr = ws.max_row
+        for j, c in enumerate(ws[rr], 1):
+            c.border = border; c.font = Font(size=9)
+            if j == 4: c.number_format = '0.0000%'
+            if j in (5, 8, 9, 10): c.number_format = '$#,##0.00'
+            if j in (6, 7): c.number_format = '0.0"%"'
+            if i % 2 == 1: c.fill = alt
+    # toplam
+    ws.append(["", "TOPLAM", "", "", ozet["ihale_toplam"], "", "",
+               ozet["donem_hakedis"], ozet["onceki_hakedis"], ozet["toplam_hakedis"]])
+    tr = ws.max_row
+    for j, c in enumerate(ws[tr], 1):
+        c.font = Font(bold=True, size=10); c.border = border
+        if j in (5, 8, 9, 10): c.number_format = '$#,##0.00'
+    for col, w in zip("ABCDEFGHIJ", [16, 42, 8, 11, 17, 14, 14, 15, 15, 16]):
+        ws.column_dimensions[col].width = w
+    ws.freeze_panes = "A4"
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return buf.getvalue()
+
+
+def hakedis_tablo_pdf(hesap_rows, ozet, donem_sayisi=0):
+    """Hakediş tablosunu PDF olarak üretir (bytes)."""
+    import io, os
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    reg = next((p for p in ["assets/fonts/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "DejaVuSans.ttf"] if os.path.exists(p)), None)
+    bld = next((p for p in ["assets/fonts/DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "DejaVuSans-Bold.ttf"] if os.path.exists(p)), None)
+    if reg: pdfmetrics.registerFont(TTFont('DV', reg))
+    if bld: pdfmetrics.registerFont(TTFont('DV-B', bld))
+    FN = 'DV' if reg else 'Helvetica'; FB = 'DV-B' if bld else 'Helvetica-Bold'
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=8*mm, rightMargin=8*mm, topMargin=10*mm, bottomMargin=8*mm)
+    h1 = ParagraphStyle('h1', fontName=FB, fontSize=14, textColor=colors.HexColor('#0f2942'), spaceAfter=2)
+    sub = ParagraphStyle('sub', fontName=FN, fontSize=9, textColor=colors.HexColor('#64748b'), spaceAfter=8)
+    cell = ParagraphStyle('cell', fontName=FN, fontSize=7, leading=9)
+    cellb = ParagraphStyle('cellb', fontName=FB, fontSize=7, leading=9)
+    el = [Paragraph('ARAKONAK GES — HAKEDİŞ TABLOSU', h1),
+          Paragraph(f"İhale Bedeli: ${ozet['ihale_toplam']:,.0f} · Toplam Hakediş: ${ozet['toplam_hakedis']:,.0f} · Dönem sayısı: {donem_sayisi}", sub)]
+    head = ['Poz No', 'Pozun Adı', 'Birim', 'Pursantaj', 'İhale Purs.$', 'Toplam İlerl.', 'Dönem İlerl.', 'Dönem Hak.', 'Önceki Hak.', 'Toplam Hak.']
+    data = [[Paragraph(f'<b>{h}</b>', cellb) for h in head]]
+    for r in hesap_rows:
+        data.append([
+            Paragraph(str(r["poz"]), cell), Paragraph(str(r["ad"])[:55], cell),
+            Paragraph(str(r["birim"]), cell), Paragraph(f'%{r["pursantaj"]*100:.3f}', cell),
+            Paragraph(f'${r["ihale_tutar"]:,.0f}', cell), Paragraph(f'%{r["toplam_ilerleme"]:.0f}', cell),
+            Paragraph(f'%{r["donem_ilerleme"]:.1f}', cell), Paragraph(f'${r["donem_hakedis"]:,.0f}', cell),
+            Paragraph(f'${r["onceki_hakedis"]:,.0f}', cell), Paragraph(f'${r["toplam_hakedis"]:,.0f}', cell)])
+    data.append([Paragraph('', cell), Paragraph('<b>TOPLAM</b>', cellb)] + [Paragraph('', cell)]*2 +
+                [Paragraph(f'<b>${ozet["ihale_toplam"]:,.0f}</b>', cellb), Paragraph('', cell), Paragraph('', cell),
+                 Paragraph(f'<b>${ozet["donem_hakedis"]:,.0f}</b>', cellb),
+                 Paragraph(f'<b>${ozet["onceki_hakedis"]:,.0f}</b>', cellb),
+                 Paragraph(f'<b>${ozet["toplam_hakedis"]:,.0f}</b>', cellb)])
+    t = Table(data, colWidths=[20*mm, 70*mm, 12*mm, 18*mm, 24*mm, 20*mm, 20*mm, 24*mm, 24*mm, 26*mm], repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f2942')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, -1), FN), ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f1f5f9')]),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e8eef5')),
+        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    el.append(t)
+    doc.build(el); buf.seek(0)
+    return buf.getvalue()

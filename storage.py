@@ -356,3 +356,44 @@ def load_hakedis(conn):
 def save_hakedis(conn, df):
     df.to_sql("hakedis_imalat", conn, if_exists="replace", index=False)
     conn.commit()
+
+
+# ══════════════ HAKEDİŞ DÖNEMLERİ ══════════════
+def load_hakedis_donemler(conn):
+    """Kayıtlı hakediş dönemleri (No, tarih, kalem bazında ilerleme snapshot'ı)."""
+    try:
+        df = pd.read_sql("SELECT * FROM hakedis_donem ORDER BY donem_no", conn)
+        return df
+    except Exception:
+        return pd.DataFrame(columns=["donem_no", "tarih", "data"])
+
+
+def add_hakedis_donem(conn, donem_no, tarih, data_json):
+    """Yeni hakediş dönemi ekle (data_json: {poz: toplam_ilerleme%})."""
+    import json as _j
+    conn.execute("""CREATE TABLE IF NOT EXISTS hakedis_donem(
+        donem_no INTEGER PRIMARY KEY, tarih TEXT, data TEXT)""")
+    payload = data_json if isinstance(data_json, str) else _j.dumps(data_json, ensure_ascii=False)
+    conn.execute("INSERT OR REPLACE INTO hakedis_donem(donem_no,tarih,data) VALUES(?,?,?)",
+                 (int(donem_no), str(tarih), payload))
+    conn.commit()
+
+
+def delete_hakedis_donem(conn, donem_no):
+    try:
+        conn.execute("DELETE FROM hakedis_donem WHERE donem_no=?", (int(donem_no),))
+        conn.commit()
+    except Exception:
+        pass
+
+
+def son_hakedis_donem(conn):
+    """En son hakediş döneminin kümülatif ilerlemesini {poz: %} döndürür. Yoksa {}."""
+    import json as _j
+    try:
+        df = pd.read_sql("SELECT * FROM hakedis_donem ORDER BY donem_no DESC LIMIT 1", conn)
+        if len(df) > 0:
+            return _j.loads(df.iloc[0]["data"])
+    except Exception:
+        pass
+    return {}
