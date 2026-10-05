@@ -904,7 +904,7 @@ elif page == "Hakediş Tablo":
         view = [r for r in view if r["disc"] == disc_view]
     if ara:
         view = [r for r in view if ara.lower() in str(r["ad"]).lower()]
-    view = sorted(view, key=lambda r: -r["ihale_tutar"])
+    view = sorted(view, key=lambda r: r.get("sira", 0))   # Excel sıra no ile aynı
 
     st.caption(f"Görüntülenen: {len(view)} kalem".replace("$", "\\$"))
 
@@ -913,6 +913,7 @@ elif page == "Hakediş Tablo":
     for r in view[:400]:
         rows_html += (
             '<tr>'
+            f'<td style="text-align:center;color:#5f7a99;font-size:10px">{r.get("sira","")}</td>'
             f'<td style="color:#5f7a99;font-size:10px">{r["poz"]}</td>'
             f'<td class="mx-name" style="font-size:11px;max-width:240px">{_ad_html(r["ad"], 70)}</td>'
             f'<td style="text-align:center;color:#7fb0b3;font-size:10px">{r["birim"]}</td>'
@@ -926,7 +927,7 @@ elif page == "Hakediş Tablo":
             '</tr>')
     st.markdown(
         '<table class="mx"><tr>'
-        '<th>POZ NO</th><th>POZUN ADI</th><th style="text-align:center">BİRİM</th>'
+        '<th style="text-align:center">SIRA NO</th><th>POZ NO</th><th>POZUN ADI</th><th style="text-align:center">BİRİM</th>'
         '<th style="text-align:right">PURSANTAJ</th><th style="text-align:right">İHALE PURS. TUTARI</th>'
         '<th style="text-align:center">TOPLAM İLERLEME</th><th style="text-align:center">DÖNEM İLERLEME</th>'
         '<th style="text-align:right">DÖNEM HAKEDİŞ</th><th style="text-align:right">ÖNCEKİ HAKEDİŞ</th>'

@@ -803,6 +803,7 @@ def hakedis_tablo_rows(df):
         c = core_poz(k["poz"])
         real = core_real.get(c, 0.0)
         rows.append({
+            "sira": k.get("sira", 0),          # Excel sıra no (sıralama için)
             "poz": k["poz"], "ad": k["ad"], "birim": k["birim"], "disc": "",
             "pursantaj": k["pursantaj"],
             "ihale_tutar": k["ihale_tutar"],   # Excel'den BİREBİR, yuvarlama yok
