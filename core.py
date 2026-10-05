@@ -776,21 +776,37 @@ IHALE_BEDELI = 10250000.0
 
 
 def hakedis_tablo_rows(df):
-    """Hakediş Tablo sayfası için kalem bazında satırlar.
-    İhale pursantaj tutarı = ihale bedeli × pursantaj."""
-    d = _maliyet_join(df)
-    import data_maliyet
-    admap = {r["poz"]: (r["ad"], r["birim"], r["disc"]) for r in data_maliyet.MALIYET}
+    """Hakediş Tablo — NAS Excel'inden BİREBİR (83 kalem, yuvarlama yok).
+    İlerleme (real) İş Programı'ndan poz çekirdeği eşlemesiyle alınır."""
+    import data_hakedis, data_maliyet, re
+    # İş Programı ilerlemesi: poz → real%
+    d = df[["id", "real"]].copy() if "real" in df.columns else df[["id"]].copy()
+    d["real"] = pd.to_numeric(d.get("real", 0), errors="coerce").fillna(0.0)
+    real_map = dict(zip(d["id"].astype(str), d["real"]))
+
+    def core_poz(p):
+        p = str(p).upper().strip()
+        p = re.sub(r'\.(TN|SM|SM2|N|D|M)$', '', p)
+        return {'PR.ELK.5853': 'PR.ELK.5353'}.get(p, p)
+    # İş Programı poz çekirdeği → real (aynı çekirdekte birden fazla varsa ortalama)
+    core_real = {}
+    core_cnt = {}
+    for pid, rv in real_map.items():
+        c = core_poz(pid)
+        core_real[c] = core_real.get(c, 0) + rv
+        core_cnt[c] = core_cnt.get(c, 0) + 1
+    for c in core_real:
+        core_real[c] /= core_cnt[c]
+
     rows = []
-    for _, r in d.iterrows():
-        pid = r["id"]
-        ad, birim, disc = admap.get(pid, (pid, "", ""))
-        purs = float(r["pursantaj"])
+    for k in data_hakedis.kalemler():
+        c = core_poz(k["poz"])
+        real = core_real.get(c, 0.0)
         rows.append({
-            "poz": pid, "ad": ad, "birim": birim, "disc": disc,
-            "pursantaj": purs,
-            "ihale_tutar": IHALE_BEDELI * purs,
-            "real": float(r["real"]),
+            "poz": k["poz"], "ad": k["ad"], "birim": k["birim"], "disc": "",
+            "pursantaj": k["pursantaj"],
+            "ihale_tutar": k["ihale_tutar"],   # Excel'den BİREBİR, yuvarlama yok
+            "real": real,
         })
     return rows
 
