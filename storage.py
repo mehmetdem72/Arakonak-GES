@@ -397,3 +397,32 @@ def son_hakedis_donem(conn):
     except Exception:
         pass
     return {}
+
+
+# ══════════════ HAKEDİŞ İLERLEME (83 kalem, bağımsız) ══════════════
+def load_hakedis_ilerleme(conn):
+    """Hakediş kalemlerinin kendi ilerlemesi (poz → toplam ilerleme %). İş Programı'ndan bağımsız."""
+    try:
+        df = pd.read_sql("SELECT * FROM hakedis_ilerleme", conn)
+        if len(df) == 0:
+            raise ValueError("boş")
+        return dict(zip(df["poz"].astype(str), pd.to_numeric(df["real"], errors="coerce").fillna(0.0)))
+    except Exception:
+        import data_hakedis
+        d = {k["poz"]: 0.0 for k in data_hakedis.kalemler()}
+        save_hakedis_ilerleme(conn, d)
+        return d
+
+
+def save_hakedis_ilerleme(conn, ilerleme_dict):
+    """Hakediş ilerlemesini kaydet (poz → %)."""
+    df = pd.DataFrame([{"poz": p, "real": float(v)} for p, v in ilerleme_dict.items()])
+    df.to_sql("hakedis_ilerleme", conn, if_exists="replace", index=False)
+    conn.commit()
+
+
+def set_hakedis_ilerleme(conn, poz, real):
+    """Tek kalemin hakediş ilerlemesini güncelle."""
+    d = load_hakedis_ilerleme(conn)
+    d[str(poz)] = float(real)
+    save_hakedis_ilerleme(conn, d)

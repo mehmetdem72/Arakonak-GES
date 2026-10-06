@@ -775,39 +775,20 @@ def stok_ges_progress(stok_df):
 IHALE_BEDELI = 10250000.0
 
 
-def hakedis_tablo_rows(df):
+def hakedis_tablo_rows(ilerleme_map=None):
     """Hakediş Tablo — NAS Excel'inden BİREBİR (83 kalem, yuvarlama yok).
-    İlerleme (real) İş Programı'ndan poz çekirdeği eşlemesiyle alınır."""
-    import data_hakedis, data_maliyet, re
-    # İş Programı ilerlemesi: poz → real%
-    d = df[["id", "real"]].copy() if "real" in df.columns else df[["id"]].copy()
-    d["real"] = pd.to_numeric(d.get("real", 0), errors="coerce").fillna(0.0)
-    real_map = dict(zip(d["id"].astype(str), d["real"]))
-
-    def core_poz(p):
-        p = str(p).upper().strip()
-        p = re.sub(r'\.(TN|SM|SM2|N|D|M)$', '', p)
-        return {'PR.ELK.5853': 'PR.ELK.5353'}.get(p, p)
-    # İş Programı poz çekirdeği → real (aynı çekirdekte birden fazla varsa ortalama)
-    core_real = {}
-    core_cnt = {}
-    for pid, rv in real_map.items():
-        c = core_poz(pid)
-        core_real[c] = core_real.get(c, 0) + rv
-        core_cnt[c] = core_cnt.get(c, 0) + 1
-    for c in core_real:
-        core_real[c] /= core_cnt[c]
-
+    İlerleme BAĞIMSIZ (hakedis_ilerleme tablosundan, poz bazında ayrı).
+    ilerleme_map: {poz: toplam ilerleme %} — None ise hepsi 0."""
+    import data_hakedis
+    im = ilerleme_map or {}
     rows = []
     for k in data_hakedis.kalemler():
-        c = core_poz(k["poz"])
-        real = core_real.get(c, 0.0)
         rows.append({
-            "sira": k.get("sira", 0),          # Excel sıra no (sıralama için)
+            "sira": k.get("sira", 0),
             "poz": k["poz"], "ad": k["ad"], "birim": k["birim"], "disc": "",
             "pursantaj": k["pursantaj"],
             "ihale_tutar": k["ihale_tutar"],   # Excel'den BİREBİR, yuvarlama yok
-            "real": real,
+            "real": float(im.get(k["poz"], 0.0)),   # kalem bazında AYRI ilerleme
         })
     return rows
 
